@@ -387,6 +387,114 @@ footer {
   margin: 0;
   max-width: 470px;
 }
+.brand-subtitle {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+}
+.brand-version-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid #dbe5ee;
+  border-radius: 999px;
+  color: #7e91a4;
+  background: #f5f8fb;
+  font-size: 10px;
+  line-height: 1;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s;
+}
+.brand-version-button:hover,
+.brand-version-button:focus-visible {
+  border-color: #9abbd0;
+  color: #1768a7;
+  background: #edf7fd;
+  outline: 0;
+}
+.update-available-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: #d94b3e;
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 2px #d94b3e55;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #102a4366;
+}
+.update-dialog {
+  width: min(100%, 380px);
+  padding: 24px;
+  border: 1px solid #dbe4ed;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 20px 55px #183d5b33;
+}
+.update-dialog h2 {
+  margin: 0;
+  color: #152942;
+  font-size: 18px;
+}
+.update-dialog p {
+  margin: 10px 0 22px;
+  color: #718096;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.update-dialog small {
+  display: block;
+  color: #738295;
+  font-size: 11px;
+}
+.update-notes {
+  max-height: 130px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.update-progress {
+  height: 7px;
+  margin: -8px 0 9px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #dce8f0;
+}
+.update-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1769aa;
+  transition: width 0.2s ease;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.confirm-actions button {
+  padding: 9px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.cancel-button {
+  color: #52657a;
+  background: #e9eef3;
+}
+.confirm-button {
+  color: #fff;
+  background: #1769aa;
+}
 .profile-count {
   color: #7d8d9c;
   font-size: 11px;

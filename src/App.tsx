@@ -1,7 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { relaunch } from "@tauri-apps/plugin-process";
+import {
+  check,
+  type DownloadEvent,
+  type Update,
+} from "@tauri-apps/plugin-updater";
 import { useEffect, useMemo, useRef, useState } from "react";
+import appPackage from "../package.json";
 import {
   clearRememberedLogin,
   formatErrorMessage,
@@ -389,6 +396,21 @@ function ClickerPage({
   });
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [message, setMessage] = useState("");
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [hasAvailableUpdate, setHasAvailableUpdate] = useState(false);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateState, setUpdateState] = useState<
+    | "idle"
+    | "checking"
+    | "available"
+    | "downloading"
+    | "installing"
+    | "latest"
+    | "error"
+  >("idle");
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const updateCheckInFlight = useRef(false);
   const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>(() => {
     try {
       const value = localStorage.getItem(SAVED_PROFILES_KEY);
@@ -416,6 +438,69 @@ function ClickerPage({
   const persistRunLogs = (logs: RunLog[]) => {
     setRunLogs(logs);
     localStorage.setItem(RUN_LOGS_KEY, JSON.stringify(logs));
+  };
+  const checkForUpdates = async (openDialog = true) => {
+    if (
+      updateCheckInFlight.current ||
+      updateState === "downloading" ||
+      updateState === "installing"
+    )
+      return;
+    updateCheckInFlight.current = true;
+    if (openDialog) {
+      setUpdateDialogOpen(true);
+      setUpdateState("checking");
+      setUpdateError(null);
+    }
+    try {
+      const update = await check({ timeout: 15_000 });
+      if (!update) {
+        setHasAvailableUpdate(false);
+        if (openDialog) setUpdateState("latest");
+        return;
+      }
+      setAvailableUpdate(update);
+      setHasAvailableUpdate(true);
+      if (openDialog) setUpdateState("available");
+    } catch (error) {
+      if (openDialog) {
+        setUpdateState("error");
+        setUpdateError(formatErrorMessage(error));
+      }
+    } finally {
+      updateCheckInFlight.current = false;
+    }
+  };
+  const closeUpdateDialog = async () => {
+    if (updateState === "downloading" || updateState === "installing") return;
+    await availableUpdate?.close().catch(() => undefined);
+    setAvailableUpdate(null);
+    setUpdateDialogOpen(false);
+    setUpdateState("idle");
+    setUpdateError(null);
+  };
+  const installUpdate = async () => {
+    if (!availableUpdate) return;
+    setUpdateState("downloading");
+    setUpdateProgress(0);
+    setUpdateError(null);
+    try {
+      let downloaded = 0;
+      let total = 0;
+      await availableUpdate.downloadAndInstall((event: DownloadEvent) => {
+        if (event.event === "Started") total = event.data.contentLength ?? 0;
+        else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (total > 0)
+            setUpdateProgress(Math.min(100, (downloaded / total) * 100));
+        } else if (event.event === "Finished") setUpdateProgress(100);
+      });
+      setUpdateState("installing");
+      await relaunch();
+    } catch (error) {
+      setUpdateState("error");
+      setUpdateError(formatErrorMessage(error));
+    }
   };
 
   useEffect(() => {
@@ -453,6 +538,20 @@ function ClickerPage({
     return () => {
       dispose?.();
       disposeSelection?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    void checkForUpdates(false);
+    const interval = window.setInterval(
+      () => void checkForUpdates(false),
+      5 * 60_000,
+    );
+    const onFocus = () => void checkForUpdates(false);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
@@ -628,7 +727,23 @@ function ClickerPage({
           </div>
           <div>
             <strong>GoTap</strong>
-            <small>桌面自动点击器</small>
+            <small className="brand-subtitle">
+              桌面自动点击器
+              <button
+                className="brand-version-button"
+                onClick={() => void checkForUpdates(true)}
+                title="检查更新"
+                type="button"
+              >
+                v{appPackage.version}
+                {hasAvailableUpdate && (
+                  <span
+                    className="update-available-dot"
+                    aria-label="有新版本可更新"
+                  />
+                )}
+              </button>
+            </small>
           </div>
         </div>
         <div className="account">
@@ -949,7 +1064,90 @@ function ClickerPage({
           </button>
         </div>
       </section>
-      <footer>GoTap 0.1.0 · 当前用户 {session.user.email}</footer>
+      {updateDialogOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="update-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="update-title"
+          >
+            <h2 id="update-title">
+              {updateState === "latest"
+                ? "当前已是最新版本"
+                : updateState === "error"
+                  ? "检查更新失败"
+                  : availableUpdate
+                    ? `发现 GoTap ${availableUpdate.version}`
+                    : "检查 GoTap 更新"}
+            </h2>
+            {updateState === "checking" && <p>正在连接更新服务，请稍候…</p>}
+            {updateState === "latest" && (
+              <p>当前版本 v{appPackage.version} 暂无新版本。</p>
+            )}
+            {updateState === "error" && (
+              <p>{updateError ?? "暂时无法获取更新信息，请稍后重试。"}</p>
+            )}
+            {availableUpdate &&
+              updateState !== "error" &&
+              updateState !== "checking" && (
+                <>
+                  <p className="update-notes">
+                    {availableUpdate.body || "本次更新包含稳定性和体验改进。"}
+                  </p>
+                  {(updateState === "downloading" ||
+                    updateState === "installing") && (
+                    <div
+                      className="update-progress"
+                      aria-label={`已下载 ${Math.round(updateProgress)}%`}
+                    >
+                      <span style={{ width: `${updateProgress}%` }} />
+                    </div>
+                  )}
+                  {updateState === "downloading" && (
+                    <small>正在下载更新… {Math.round(updateProgress)}%</small>
+                  )}
+                  {updateState === "installing" && (
+                    <small>正在安装并重启 GoTap…</small>
+                  )}
+                </>
+              )}
+            <div className="confirm-actions">
+              {updateState !== "downloading" &&
+                updateState !== "installing" && (
+                  <button
+                    className="cancel-button"
+                    onClick={() => void closeUpdateDialog()}
+                    type="button"
+                  >
+                    关闭
+                  </button>
+                )}
+              {updateState === "available" && (
+                <button
+                  className="confirm-button action-button"
+                  onClick={() => void installUpdate()}
+                  type="button"
+                >
+                  更新并重启
+                </button>
+              )}
+              {updateState === "error" && (
+                <button
+                  className="confirm-button action-button"
+                  onClick={() => void checkForUpdates(true)}
+                  type="button"
+                >
+                  重试
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+      <footer>
+        GoTap v{appPackage.version} · 当前用户 {session.user.email}
+      </footer>
     </main>
   );
 }
