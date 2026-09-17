@@ -336,6 +336,20 @@ footer {
   color: #2874a7;
   font-size: 12px;
 }
+.shortcut-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid #dce8f0;
+  border-radius: 12px;
+  background: #f7fbfd;
+}
+.shortcut-card .hint {
+  margin: 0;
+  max-width: 470px;
+}
 .auth-shell {
   min-height: 100vh;
   display: grid;

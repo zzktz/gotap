@@ -347,6 +347,20 @@ pub fn get_auto_launch_status() -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub fn open_accessibility_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .status()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+    #[cfg(not(target_os = "macos"))]
+    Err("辅助功能设置入口仅适用于 macOS".into())
+}
+
+#[tauri::command]
 pub async fn control_request(
     path: String,
     method: String,

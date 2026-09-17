@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "process:allow-restart",
+    "global-shortcut:default",
     "updater:default"
   ]
 }

@@ -407,6 +407,25 @@ function ClickerPage({
   };
   const running = status.state === "running";
   useEffect(() => {
+    let disposeToggle: (() => void) | undefined;
+    let disposeStop: (() => void) | undefined;
+    void listen("hotkey:toggle", () => {
+      if (running) stop();
+      else void start();
+    }).then((unlisten) => {
+      disposeToggle = unlisten;
+    });
+    void listen("hotkey:stop", () => {
+      if (running) stop();
+    }).then((unlisten) => {
+      disposeStop = unlisten;
+    });
+    return () => {
+      disposeToggle?.();
+      disposeStop?.();
+    };
+  }, [running, profile]);
+  useEffect(() => {
     let dispose: (() => void) | undefined;
     void listen("tray:toggle-clicker", () => {
       if (running) stop();
@@ -590,6 +609,25 @@ function ClickerPage({
             登录系统后自动启动
           </label>
           <span className="privacy">所有坐标和参数仅保存在本机</span>
+        </div>
+        <div className="shortcut-card">
+          <div>
+            <p className="eyebrow">快捷键与权限</p>
+            <p className="hint">
+              全局快捷键：⌘/Ctrl+Shift+Space 开始/停止，⌘/Ctrl+Shift+X
+              紧急停止。 macOS 需要授予辅助功能权限。
+            </p>
+          </div>
+          <button
+            className="secondary"
+            onClick={() =>
+              void invoke("open_accessibility_settings").catch((error) =>
+                setMessage(formatErrorMessage(error)),
+              )
+            }
+          >
+            打开辅助功能设置
+          </button>
         </div>
       </section>
       <footer>GoTap 0.1.0 · 当前用户 {session.user.email}</footer>
