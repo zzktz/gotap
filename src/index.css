@@ -336,6 +336,41 @@ footer {
   color: #2874a7;
   font-size: 12px;
 }
+.target-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.target-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.target-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #617386;
+  background: #f6f9fb;
+  font-size: 12px;
+}
+.target-item span {
+  min-width: 43px;
+  font-weight: 650;
+}
+.target-item code {
+  flex: 1;
+  color: #25445f;
+  font-size: 12px;
+}
+.remove-target {
+  padding: 2px 4px;
+  color: #b14a42;
+  background: transparent;
+  font-size: 11px;
+}
 .shortcut-card {
   display: flex;
   align-items: center;

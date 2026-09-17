@@ -30,6 +30,19 @@ pub struct ClickProfile {
     pub repeat_mode: RepeatMode,
     pub repeat_count: u64,
     pub button: ClickButton,
+    #[serde(default)]
+    pub targets: Vec<ClickTarget>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClickTarget {
+    pub x: i32,
+    pub y: i32,
+    #[serde(default)]
+    pub width: u32,
+    #[serde(default)]
+    pub height: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -100,6 +113,11 @@ fn validate(profile: &ClickProfile) -> Result<(), String> {
         && !(1..=10_000_000).contains(&profile.repeat_count)
     {
         return Err("点击次数必须在 1 至 10000000 之间".into());
+    }
+    for target in &profile.targets {
+        if target.x < -100_000 || target.x > 100_000 || target.y < -100_000 || target.y > 100_000 {
+            return Err("步骤坐标超出有效范围".into());
+        }
     }
     Ok(())
 }
@@ -187,13 +205,23 @@ pub fn start_clicking(
             }
         };
         let button = input_button(&profile.button);
+        let targets = if profile.targets.is_empty() {
+            vec![(profile.x, profile.y)]
+        } else {
+            profile
+                .targets
+                .iter()
+                .map(|target| (target.x, target.y))
+                .collect()
+        };
         let mut completed = 0u64;
         loop {
             if cancel.load(Ordering::Relaxed) {
                 break;
             }
+            let (x, y) = targets[(completed as usize) % targets.len()];
             if let Err(error) = enigo
-                .move_mouse(profile.x, profile.y, Coordinate::Abs)
+                .move_mouse(x, y, Coordinate::Abs)
                 .and_then(|_| enigo.button(button, Direction::Press))
             {
                 if let Ok(mut status) = runtime.status.lock() {
@@ -312,6 +340,7 @@ mod tests {
             repeat_mode: RepeatMode::Count,
             repeat_count: 3,
             button: ClickButton::Left,
+            targets: Vec::new(),
         }
     }
 

@@ -32,6 +32,13 @@ interface ClickProfile {
   repeatMode: RepeatMode;
   repeatCount: number;
   button: ClickButton;
+  targets: ClickTarget[];
+}
+interface ClickTarget {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 interface ClickerStatus {
   state: "idle" | "running" | "stopped" | "completed" | "error";
@@ -57,6 +64,7 @@ const DEFAULT_PROFILE: ClickProfile = {
   repeatMode: "count",
   repeatCount: 10,
   button: "left",
+  targets: [],
 };
 
 function SelectionOverlay() {
@@ -340,7 +348,12 @@ function ClickerPage({
   useEffect(() => {
     void invoke<ClickProfile | null>("load_settings")
       .then((value) => {
-        if (value) setProfile(value);
+        if (value)
+          setProfile({
+            ...DEFAULT_PROFILE,
+            ...value,
+            targets: value.targets ?? [],
+          });
       })
       .catch(() => undefined);
     void invoke<boolean>("get_auto_launch_status")
@@ -390,6 +403,29 @@ function ClickerPage({
     } catch (error) {
       setMessage(formatErrorMessage(error));
     }
+  };
+  const addCurrentTarget = () => {
+    setProfile((current) => ({
+      ...current,
+      targets: [
+        ...current.targets,
+        {
+          x: current.x,
+          y: current.y,
+          width: current.width,
+          height: current.height,
+        },
+      ],
+    }));
+    setMessage(`已添加第 ${profile.targets.length + 1} 个点击步骤`);
+  };
+  const removeTarget = (index: number) => {
+    setProfile((current) => ({
+      ...current,
+      targets: current.targets.filter(
+        (_, targetIndex) => targetIndex !== index,
+      ),
+    }));
   };
   const start = async () => {
     setMessage("");
@@ -503,8 +539,53 @@ function ClickerPage({
               已选择区域：{profile.width} × {profile.height}（点击中心）
             </p>
           )}
+          <div className="target-actions">
+            <button
+              className="secondary"
+              onClick={addCurrentTarget}
+              disabled={running}
+            >
+              添加当前坐标为步骤
+            </button>
+            {profile.targets.length > 0 && (
+              <button
+                className="secondary"
+                onClick={() =>
+                  setProfile((current) => ({ ...current, targets: [] }))
+                }
+                disabled={running}
+              >
+                清空步骤
+              </button>
+            )}
+          </div>
+          {profile.targets.length > 0 && (
+            <div className="target-list">
+              {profile.targets.map((target, index) => (
+                <div
+                  className="target-item"
+                  key={`${target.x}-${target.y}-${index}`}
+                >
+                  <span>步骤 {index + 1}</span>
+                  <code>
+                    ({target.x}, {target.y})
+                    {target.width > 0 &&
+                      ` · ${target.width} × ${target.height}`}
+                  </code>
+                  <button
+                    className="remove-target"
+                    onClick={() => removeTarget(index)}
+                    disabled={running}
+                    aria-label={`删除步骤 ${index + 1}`}
+                  >
+                    删除
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <p className="hint">
-            区域框选后将点击区域中心；跨显示器坐标以当前主屏为基准。
+            添加步骤后将按列表顺序循环点击；未添加步骤时使用当前坐标。跨显示器坐标以当前主屏为基准。
           </p>
         </div>
         <div className="card">
