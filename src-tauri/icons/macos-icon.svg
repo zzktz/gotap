@@ -1,9 +1,1 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <!-- Keep a macOS icon safe area so Launchpad does not render the artwork oversized. -->
-  <g transform="translate(102.4 102.4) scale(.8)">
-    <rect width="1024" height="1024" rx="300" fill="#1768a7"/>
-    <path d="M266 152 710 530 535 559 646 806 548 852 435 603 330 746Z"
-          fill="#fff" stroke="#123b5b" stroke-width="30" stroke-linejoin="round"/>
-    <circle cx="716" cy="270" r="62" fill="#65c7ff" stroke="#123b5b" stroke-width="24"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="none" version="1.1" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><clipPath id="master_svg0_27_1079"><rect x="0" y="0" width="1024" height="1024" rx="0"/></clipPath><clipPath id="master_svg1_27_1081"><rect x="181.9000244140625" y="182" width="660" height="660" rx="0"/></clipPath></defs><g clip-path="url(#master_svg0_27_1079)"><g clip-path="url(#master_svg1_27_1081)"><path d="M841.9017060253907,562.160380390625L421.8116760253906,421.910400390625L562.0616560253907,842.0004303906251L678.5516360253906,725.1804203906249L771.9416760253906,818.5704003906251L818.4716760253907,772.040440390625L725.0816660253906,678.650420390625L841.9017060253907,562.160380390625Z" fill="#FFFFFF" fill-opacity="1"/><path d="M247.9000244140625,743L247.9000244140625,248L742.9000244140625,248L742.9000244140625,461.18002L808.9000844140625,483.29001L808.9000844140625,182L181.9000244140625,182L181.9000244140625,809L483.1900344140625,809L461.0800144140625,743L247.9000244140625,743Z" fill="#FFFFFF" fill-opacity="1"/></g></g></svg>

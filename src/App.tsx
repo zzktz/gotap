@@ -9,6 +9,7 @@ import {
 } from "@tauri-apps/plugin-updater";
 import { useEffect, useMemo, useRef, useState } from "react";
 import appPackage from "../package.json";
+import logoUrl from "./logo.svg";
 import {
   clearRememberedLogin,
   formatErrorMessage,
@@ -90,30 +91,7 @@ const DEFAULT_PROFILE: ClickProfile = {
 };
 
 function CursorLogo() {
-  return (
-    <svg
-      className="cursor-logo"
-      viewBox="0 0 100 100"
-      role="img"
-      aria-label="GoTap 鼠标箭头标志"
-    >
-      <path
-        d="M25 15 70 53 52 56 64 82 54 87 42 61 31 75Z"
-        fill="currentColor"
-        stroke="#123b5b"
-        strokeWidth="4"
-        strokeLinejoin="round"
-      />
-      <circle
-        cx="72"
-        cy="27"
-        r="6"
-        fill="#65c7ff"
-        stroke="#123b5b"
-        strokeWidth="2.5"
-      />
-    </svg>
-  );
+  return <img className="cursor-logo" src={logoUrl} alt="GoTap 鼠标箭头标志" />;
 }
 
 function SelectionOverlay() {
