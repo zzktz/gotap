@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -73,7 +73,6 @@ function SelectionOverlay() {
       close();
       return;
     }
-    const { emit } = await import("@tauri-apps/api/event");
     await emit("selection:completed", {
       x: Math.round(left + width / 2),
       y: Math.round(top + height / 2),
