@@ -40,6 +40,12 @@ interface ClickTarget {
   width: number;
   height: number;
 }
+interface SavedProfile {
+  name: string;
+  profile: ClickProfile;
+}
+
+const SAVED_PROFILES_KEY = "gotap.savedProfiles.v1";
 interface ClickerStatus {
   state: "idle" | "running" | "stopped" | "completed" | "error";
   completed: number;
@@ -344,6 +350,20 @@ function ClickerPage({
   });
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [message, setMessage] = useState("");
+  const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>(() => {
+    try {
+      const value = localStorage.getItem(SAVED_PROFILES_KEY);
+      return value ? (JSON.parse(value) as SavedProfile[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [profileName, setProfileName] = useState("");
+
+  const persistProfiles = (profiles: SavedProfile[]) => {
+    setSavedProfiles(profiles);
+    localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify(profiles));
+  };
 
   useEffect(() => {
     void invoke<ClickProfile | null>("load_settings")
@@ -426,6 +446,37 @@ function ClickerPage({
         (_, targetIndex) => targetIndex !== index,
       ),
     }));
+  };
+  const saveNamedProfile = () => {
+    const name = profileName.trim();
+    if (!name) {
+      setMessage("请输入方案名称");
+      return;
+    }
+    const snapshot = JSON.parse(JSON.stringify(profile)) as ClickProfile;
+    const next = savedProfiles.filter((item) => item.name !== name);
+    next.push({ name, profile: snapshot });
+    persistProfiles(next);
+    setProfileName(name);
+    setMessage(`方案“${name}”已保存`);
+  };
+  const loadNamedProfile = (name: string) => {
+    const item = savedProfiles.find((value) => value.name === name);
+    if (!item) return;
+    setProfile({
+      ...DEFAULT_PROFILE,
+      ...item.profile,
+      targets: item.profile.targets ?? [],
+    });
+    setProfileName(name);
+    setMessage(`已切换到方案“${name}”`);
+  };
+  const deleteNamedProfile = () => {
+    const name = profileName.trim();
+    if (!name) return;
+    persistProfiles(savedProfiles.filter((item) => item.name !== name));
+    setProfileName("");
+    setMessage(`方案“${name}”已删除`);
   };
   const start = async () => {
     setMessage("");
@@ -655,6 +706,59 @@ function ClickerPage({
           </div>
           <p className="hint">
             点击间隔指两次按下开始之间的时间，按下时长必须小于点击间隔。
+          </p>
+        </div>
+        <div className="card profile-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">任务方案</p>
+              <h2>保存常用点击配置</h2>
+            </div>
+            <span className="profile-count">{savedProfiles.length} 个方案</span>
+          </div>
+          <div className="profile-row">
+            <input
+              value={profileName}
+              maxLength={30}
+              placeholder="例如：每日签到"
+              onChange={(event) => setProfileName(event.target.value)}
+              disabled={running}
+            />
+            <button
+              className="primary"
+              onClick={saveNamedProfile}
+              disabled={running}
+            >
+              保存方案
+            </button>
+            <button
+              className="secondary"
+              onClick={deleteNamedProfile}
+              disabled={running || !profileName.trim()}
+            >
+              删除
+            </button>
+          </div>
+          {savedProfiles.length > 0 && (
+            <div className="profile-list">
+              {savedProfiles.map((item) => (
+                <button
+                  className={`profile-item${item.name === profileName ? " active" : ""}`}
+                  key={item.name}
+                  onClick={() => loadNamedProfile(item.name)}
+                  disabled={running}
+                >
+                  <span>{item.name}</span>
+                  <small>
+                    {item.profile.targets?.length || 0} 步骤 ·{" "}
+                    {item.profile.intervalMs} ms
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="hint">
+            方案仅保存在本机浏览器存储中，不会上传到服务器。
           </p>
         </div>
         <div className="card controls">

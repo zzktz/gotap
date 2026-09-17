@@ -385,6 +385,44 @@ footer {
   margin: 0;
   max-width: 470px;
 }
+.profile-count {
+  color: #7d8d9c;
+  font-size: 11px;
+}
+.profile-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 15px;
+}
+.profile-row input {
+  flex: 1;
+}
+.profile-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+.profile-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid #dce7ee;
+  border-radius: 9px;
+  color: #31536d;
+  text-align: left;
+  background: #fbfdfe;
+}
+.profile-item.active {
+  border-color: #6baad0;
+  background: #eef8fd;
+}
+.profile-item small {
+  color: #8b9aa8;
+  font-size: 10px;
+  white-space: nowrap;
+}
 .auth-shell {
   min-height: 100vh;
   display: grid;
