@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   clearRememberedLogin,
   formatErrorMessage,
@@ -44,8 +44,17 @@ interface SavedProfile {
   name: string;
   profile: ClickProfile;
 }
+interface RunLog {
+  id: string;
+  startedAt: string;
+  endedAt: string;
+  clicks: number;
+  result: "completed" | "stopped" | "error";
+  error?: string;
+}
 
 const SAVED_PROFILES_KEY = "gotap.savedProfiles.v1";
+const RUN_LOGS_KEY = "gotap.runLogs.v1";
 interface ClickerStatus {
   state: "idle" | "running" | "stopped" | "completed" | "error";
   completed: number;
@@ -159,6 +168,7 @@ function AuthPage({
       .then((value) => setRegistrationEnabled(value.registration_enabled))
       .catch(() => undefined);
   }, []);
+
   useEffect(() => {
     if (countdown <= 0) return undefined;
     const timer = window.setInterval(
@@ -359,10 +369,24 @@ function ClickerPage({
     }
   });
   const [profileName, setProfileName] = useState("");
+  const [runLogs, setRunLogs] = useState<RunLog[]>(() => {
+    try {
+      const value = localStorage.getItem(RUN_LOGS_KEY);
+      return value ? (JSON.parse(value) as RunLog[]).slice(0, 20) : [];
+    } catch {
+      return [];
+    }
+  });
+  const runStartedAt = useRef<number | null>(null);
+  const previousState = useRef<ClickerStatus["state"]>("idle");
 
   const persistProfiles = (profiles: SavedProfile[]) => {
     setSavedProfiles(profiles);
     localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify(profiles));
+  };
+  const persistRunLogs = (logs: RunLog[]) => {
+    setRunLogs(logs);
+    localStorage.setItem(RUN_LOGS_KEY, JSON.stringify(logs));
   };
 
   useEffect(() => {
@@ -402,6 +426,31 @@ function ClickerPage({
       disposeSelection?.();
     };
   }, []);
+
+  useEffect(() => {
+    const previous = previousState.current;
+    if (status.state === "running" && previous !== "running") {
+      runStartedAt.current = Date.now();
+    } else if (
+      previous === "running" &&
+      status.state !== "running" &&
+      ["completed", "stopped", "error"].includes(status.state)
+    ) {
+      const started = runStartedAt.current ?? Date.now();
+      const result = status.state as RunLog["result"];
+      const log: RunLog = {
+        id: `${started}-${status.completed}`,
+        startedAt: new Date(started).toISOString(),
+        endedAt: new Date().toISOString(),
+        clicks: status.completed,
+        result,
+        ...(status.error ? { error: status.error } : {}),
+      };
+      persistRunLogs([log, ...runLogs].slice(0, 20));
+      runStartedAt.current = null;
+    }
+    previousState.current = status.state;
+  }, [status.state, status.completed, status.error]);
 
   const update = <K extends keyof ClickProfile>(
     key: K,
@@ -478,6 +527,18 @@ function ClickerPage({
     setProfileName("");
     setMessage(`方案“${name}”已删除`);
   };
+  const clearRunLogs = () => {
+    persistRunLogs([]);
+    setMessage("运行日志已清空");
+  };
+  const formatRunTime = (value: string) =>
+    new Date(value).toLocaleString([], {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  const totalClicks = runLogs.reduce((sum, log) => sum + log.clicks, 0);
   const start = async () => {
     setMessage("");
     try {
@@ -783,6 +844,48 @@ function ClickerPage({
           </div>
           {status.error && <p className="error">{status.error}</p>}
           {message && <p className="hint">{message}</p>}
+        </div>
+        <div className="card logs-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">运行记录</p>
+              <h2>最近执行</h2>
+            </div>
+            <div className="log-summary">
+              {runLogs.length} 次运行 · {totalClicks} 次点击
+            </div>
+          </div>
+          {runLogs.length > 0 ? (
+            <div className="log-list">
+              {runLogs.slice(0, 8).map((log) => (
+                <div className="log-item" key={log.id}>
+                  <span className={`log-result log-${log.result}`}>
+                    {log.result === "completed"
+                      ? "完成"
+                      : log.result === "error"
+                        ? "错误"
+                        : "停止"}
+                  </span>
+                  <span className="log-time">
+                    {formatRunTime(log.startedAt)}
+                  </span>
+                  <strong>{log.clicks} 次</strong>
+                  {log.error && <small title={log.error}>{log.error}</small>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="hint">完成一次点击任务后，这里会显示运行结果。</p>
+          )}
+          {runLogs.length > 0 && (
+            <button
+              className="clear-logs"
+              onClick={clearRunLogs}
+              disabled={running}
+            >
+              清空运行记录
+            </button>
+          )}
         </div>
         <div className="settings-row">
           <label className="check">

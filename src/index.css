@@ -423,6 +423,65 @@ footer {
   font-size: 10px;
   white-space: nowrap;
 }
+.logs-card {
+  overflow: hidden;
+}
+.log-summary {
+  color: #7d8d9c;
+  font-size: 11px;
+}
+.log-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+.log-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f7fafc;
+  font-size: 12px;
+}
+.log-result {
+  min-width: 30px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.log-completed {
+  color: #167053;
+}
+.log-stopped {
+  color: #6e7c89;
+}
+.log-error {
+  color: #b3443b;
+}
+.log-time {
+  color: #7f8e9d;
+  font-variant-numeric: tabular-nums;
+}
+.log-item strong {
+  margin-left: auto;
+  color: #28445c;
+  white-space: nowrap;
+}
+.log-item small {
+  max-width: 180px;
+  overflow: hidden;
+  color: #b3443b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clear-logs {
+  margin-top: 11px;
+  padding: 0;
+  color: #7f8e9d;
+  background: transparent;
+  font-size: 11px;
+}
 .auth-shell {
   min-height: 100vh;
   display: grid;
