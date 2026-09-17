@@ -81,9 +81,10 @@ pub fn run() {
 
             #[cfg(target_os = "macos")]
             let tray_builder = tray_builder.icon(
-                app.default_window_icon()
-                    .cloned()
-                    .expect("missing default application icon"),
+                tauri::image::Image::from_bytes(include_bytes!(
+                    "../icons/tray/macos/statusTemplate@2x.png"
+                ))
+                .expect("invalid macOS tray icon"),
             );
             #[cfg(not(target_os = "macos"))]
             let tray_builder = tray_builder.icon(
