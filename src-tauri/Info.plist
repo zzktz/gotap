@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>GoTap</string>
+  <key>CFBundleDisplayName</key>
+  <string>GoTap</string>
+  <!-- 使用 GoTap 图标作为应用及程序坞图标 -->
+  <key>CFBundleIconFile</key>
+  <string>icon.icns</string>
+  <key>CFBundleIconName</key>
+  <string>icon</string>
+</dict>
+</plist>
