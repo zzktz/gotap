@@ -280,24 +280,52 @@ pub fn get_cursor_position() -> Result<(i32, i32), String> {
 
 #[tauri::command]
 pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("selection") {
-        let _ = window.set_focus();
-        return Ok(());
+    destroy_selection_windows(&app);
+    let monitors = app
+        .available_monitors()
+        .map_err(|error| error.to_string())?;
+    if monitors.is_empty() {
+        return Err("未找到可用显示器".into());
     }
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        "selection",
-        tauri::WebviewUrl::App("index.html?selection=1".into()),
-    )
-    .title("选择点击区域")
-    .decorations(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .fullscreen(true)
-    .focused(true)
-    .build()
-    .map(|_| ())
-    .map_err(|error| error.to_string())
+    for (index, monitor) in monitors.iter().enumerate() {
+        let scale = monitor.scale_factor();
+        let position = monitor.position();
+        let size = monitor.size();
+        let url = format!(
+            "index.html?selection=1&offsetX={}&offsetY={}",
+            position.x as f64 / scale,
+            position.y as f64 / scale
+        );
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            format!("selection-{index}"),
+            tauri::WebviewUrl::App(url.into()),
+        )
+        .title("选择点击区域")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .position(position.x as f64 / scale, position.y as f64 / scale)
+        .inner_size(size.width as f64 / scale, size.height as f64 / scale)
+        .focused(index == 0)
+        .build()
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn close_selection_windows(app: AppHandle) {
+    destroy_selection_windows(&app);
+}
+
+fn destroy_selection_windows(app: &AppHandle) {
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("selection-") || label == "selection" {
+            let _ = window.destroy();
+        }
+    }
 }
 
 #[tauri::command]

@@ -95,62 +95,165 @@ function CursorLogo() {
 }
 
 function SelectionOverlay() {
-  const [start, setStart] = useState<{ x: number; y: number } | null>(null);
+  const [draftStart, setDraftStart] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [current, setCurrent] = useState<{ x: number; y: number } | null>(null);
-  const close = () => void getCurrentWindow().close();
-  const finish = async (point: { x: number; y: number }) => {
-    if (!start) return;
-    const left = Math.min(start.x, point.x);
-    const top = Math.min(start.y, point.y);
-    const width = Math.abs(point.x - start.x);
-    const height = Math.abs(point.y - start.y);
-    if (width < 2 || height < 2) {
-      close();
-      return;
+  const [selection, setSelection] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [dragging, setDragging] = useState<"draw" | "move" | null>(null);
+  const [moveOrigin, setMoveOrigin] = useState<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  const confirming = useRef(false);
+  const lastSelectionClick = useRef<{
+    time: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const params = new URLSearchParams(window.location.search);
+  const offsetX = Number(params.get("offsetX") ?? 0);
+  const offsetY = Number(params.get("offsetY") ?? 0);
+  const close = async () => {
+    await invoke("close_selection_windows").catch(() => undefined);
+    await getCurrentWindow()
+      .destroy()
+      .catch(() => undefined);
+  };
+  useEffect(() => {
+    document.documentElement.classList.add("selection-mode");
+    return () => document.documentElement.classList.remove("selection-mode");
+  }, []);
+  const finish = async () => {
+    if (!selection || confirming.current) return;
+    confirming.current = true;
+    try {
+      await emit("selection:completed", {
+        x: Math.round(offsetX + selection.left + selection.width / 2),
+        y: Math.round(offsetY + selection.top + selection.height / 2),
+        width: Math.round(selection.width),
+        height: Math.round(selection.height),
+      } satisfies SelectionPayload);
+      await close();
+    } catch {
+      confirming.current = false;
     }
-    await emit("selection:completed", {
-      x: Math.round(left + width / 2),
-      y: Math.round(top + height / 2),
-      width: Math.round(width),
-      height: Math.round(height),
-    } satisfies SelectionPayload);
-    close();
   };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") void close();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   });
   const rectangle =
-    start && current
+    dragging === "draw" && draftStart && current
       ? {
-          left: Math.min(start.x, current.x),
-          top: Math.min(start.y, current.y),
-          width: Math.abs(current.x - start.x),
-          height: Math.abs(current.y - start.y),
+          left: Math.min(draftStart.x, current.x),
+          top: Math.min(draftStart.y, current.y),
+          width: Math.abs(current.x - draftStart.x),
+          height: Math.abs(current.y - draftStart.y),
         }
-      : undefined;
+      : selection;
+  const isInsideSelection = (x: number, y: number) =>
+    selection !== null &&
+    x >= selection.left &&
+    x <= selection.left + selection.width &&
+    y >= selection.top &&
+    y <= selection.top + selection.height;
   return (
     <main
-      className="selection-overlay"
+      className={`selection-overlay${selection ? " has-selection" : ""}`}
       onMouseDown={(event) => {
-        if (event.button === 0) {
-          setStart({ x: event.clientX, y: event.clientY });
+        if (event.button !== 0) return;
+        if (isInsideSelection(event.clientX, event.clientY) && selection) {
+          const now = Date.now();
+          const previous = lastSelectionClick.current;
+          if (
+            previous &&
+            now - previous.time <= 500 &&
+            Math.hypot(
+              previous.x - event.clientX,
+              previous.y - event.clientY,
+            ) <= 8
+          ) {
+            lastSelectionClick.current = null;
+            void finish();
+            return;
+          }
+          lastSelectionClick.current = {
+            time: now,
+            x: event.clientX,
+            y: event.clientY,
+          };
+          setDragging("move");
+          setMoveOrigin({
+            x: event.clientX,
+            y: event.clientY,
+            left: selection.left,
+            top: selection.top,
+          });
+        } else {
+          lastSelectionClick.current = null;
+          setSelection(null);
+          setDragging("draw");
+          setDraftStart({ x: event.clientX, y: event.clientY });
           setCurrent({ x: event.clientX, y: event.clientY });
         }
       }}
       onMouseMove={(event) => {
-        if (start) setCurrent({ x: event.clientX, y: event.clientY });
+        if (dragging === "draw" && draftStart) {
+          setCurrent({ x: event.clientX, y: event.clientY });
+        } else if (dragging === "move" && moveOrigin && selection) {
+          const left = Math.max(
+            0,
+            Math.min(
+              window.innerWidth - selection.width,
+              moveOrigin.left + event.clientX - moveOrigin.x,
+            ),
+          );
+          const top = Math.max(
+            0,
+            Math.min(
+              window.innerHeight - selection.height,
+              moveOrigin.top + event.clientY - moveOrigin.y,
+            ),
+          );
+          setSelection((currentSelection) =>
+            currentSelection ? { ...currentSelection, left, top } : null,
+          );
+        }
       }}
       onMouseUp={(event) => {
-        if (event.button === 0)
-          void finish({ x: event.clientX, y: event.clientY });
+        if (event.button !== 0) return;
+        if (dragging === "draw" && draftStart) {
+          const left = Math.min(draftStart.x, event.clientX);
+          const top = Math.min(draftStart.y, event.clientY);
+          const width = Math.abs(event.clientX - draftStart.x);
+          const height = Math.abs(event.clientY - draftStart.y);
+          if (width >= 2 && height >= 2)
+            setSelection({ left, top, width, height });
+          setDraftStart(null);
+          setCurrent(null);
+        }
+        setDragging(null);
+        setMoveOrigin(null);
+      }}
+      onDoubleClick={(event) => {
+        event.preventDefault();
+        if (isInsideSelection(event.clientX, event.clientY)) void finish();
       }}
     >
       <div className="selection-instructions">
-        拖拽框选点击区域 · 松开鼠标确认 · Esc 取消
+        按住左键拖拽框选 · 松开后可移动区域 · 双击确认 · Esc 取消
       </div>
       {rectangle && <div className="selection-rectangle" style={rectangle} />}
     </main>
@@ -562,17 +665,8 @@ function ClickerPage({
     key: K,
     value: ClickProfile[K],
   ) => setProfile((current) => ({ ...current, [key]: value }));
-  const captureCursor = async () => {
-    try {
-      const [x, y] = await invoke<[number, number]>("get_cursor_position");
-      setProfile((current) => ({ ...current, x, y, width: 0, height: 0 }));
-      setMessage(`已选择坐标 (${x}, ${y})`);
-    } catch (error) {
-      setMessage(formatErrorMessage(error));
-    }
-  };
   const selectArea = async () => {
-    setMessage("请在目标窗口上拖拽框选区域，按 Esc 可取消");
+    setMessage("拖拽生成区域后可移动，双击区域确认选择");
     try {
       await invoke("open_selection_window");
     } catch (error) {
@@ -704,9 +798,8 @@ function ClickerPage({
             <CursorLogo />
           </div>
           <div>
-            <strong>GoTap</strong>
-            <small className="brand-subtitle">
-              桌面自动点击器
+            <div className="brand-title">
+              <strong>GoTap</strong>
               <button
                 className="brand-version-button"
                 onClick={() => void checkForUpdates(true)}
@@ -721,7 +814,8 @@ function ClickerPage({
                   />
                 )}
               </button>
-            </small>
+            </div>
+            <small className="brand-subtitle">桌面自动点击器</small>
           </div>
         </div>
         <div className="account">
@@ -757,18 +851,11 @@ function ClickerPage({
             </div>
           </div>
           <button
-            className="secondary wide"
-            onClick={() => void captureCursor()}
-            disabled={running}
-          >
-            将鼠标移到目标后读取当前位置
-          </button>
-          <button
-            className="secondary wide"
+            className="primary wide"
             onClick={() => void selectArea()}
             disabled={running}
           >
-            拖拽框选目标区域
+            选择目标区域
           </button>
           {profile.width > 0 && profile.height > 0 && (
             <p className="selection-summary">
@@ -781,7 +868,7 @@ function ClickerPage({
               onClick={addCurrentTarget}
               disabled={running}
             >
-              添加当前坐标为步骤
+              添加当前区域为步骤
             </button>
             {profile.targets.length > 0 && (
               <button

@@ -120,6 +120,7 @@ pub fn run() {
             commands::stop_clicking_command,
             commands::get_cursor_position,
             commands::open_selection_window,
+            commands::close_selection_windows,
             commands::load_settings,
             commands::save_settings,
             commands::set_auto_launch,
@@ -129,6 +130,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("failed to build GoTap")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(event, RunEvent::Reopen { .. }) {
+                show_main_window(app);
+            }
             if matches!(event, RunEvent::ExitRequested { .. }) {
                 commands::stop_clicking(app.state::<ClickerRuntime>().inner());
                 let _ = app.emit(CLICKER_STATUS_EVENT, ());
