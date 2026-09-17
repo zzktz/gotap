@@ -2,10 +2,8 @@
   <!-- Keep a macOS icon safe area so Launchpad does not render the artwork oversized. -->
   <g transform="translate(102.4 102.4) scale(.8)">
     <rect width="1024" height="1024" rx="300" fill="#1768a7"/>
-    <g transform="skewX(-18)">
-      <rect x="340" y="324" width="142" height="376" rx="55" fill="#dff1ff" opacity=".75"/>
-      <rect x="567" y="205" width="142" height="614" rx="55" fill="#dff1ff"/>
-      <rect x="794" y="273" width="142" height="478" rx="55" fill="#dff1ff" opacity=".88"/>
-    </g>
+    <path d="M266 152 710 530 535 559 646 806 548 852 435 603 330 746Z"
+          fill="#fff" stroke="#123b5b" stroke-width="30" stroke-linejoin="round"/>
+    <circle cx="716" cy="270" r="62" fill="#65c7ff" stroke="#123b5b" stroke-width="24"/>
   </g>
 </svg>

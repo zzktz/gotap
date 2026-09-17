@@ -82,6 +82,33 @@ const DEFAULT_PROFILE: ClickProfile = {
   targets: [],
 };
 
+function CursorLogo() {
+  return (
+    <svg
+      className="cursor-logo"
+      viewBox="0 0 100 100"
+      role="img"
+      aria-label="GoTap 鼠标箭头标志"
+    >
+      <path
+        d="M25 15 70 53 52 56 64 82 54 87 42 61 31 75Z"
+        fill="currentColor"
+        stroke="#123b5b"
+        strokeWidth="4"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="72"
+        cy="27"
+        r="6"
+        fill="#65c7ff"
+        stroke="#123b5b"
+        strokeWidth="2.5"
+      />
+    </svg>
+  );
+}
+
 function SelectionOverlay() {
   const [start, setStart] = useState<{ x: number; y: number } | null>(null);
   const [current, setCurrent] = useState<{ x: number; y: number } | null>(null);
@@ -225,7 +252,9 @@ function AuthPage({
     <main className="auth-shell">
       <section className="card auth-card">
         <div className="brand">
-          <div className="brand-mark">GT</div>
+          <div className="brand-mark">
+            <CursorLogo />
+          </div>
           <div>
             <strong>GoTap</strong>
             <small>轻量、可靠的桌面自动点击器</small>
@@ -594,7 +623,9 @@ function ClickerPage({
     <main className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">GT</div>
+          <div className="brand-mark">
+            <CursorLogo />
+          </div>
           <div>
             <strong>GoTap</strong>
             <small>桌面自动点击器</small>
