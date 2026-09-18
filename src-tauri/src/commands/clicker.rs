@@ -111,10 +111,8 @@ fn validate(profile: &ClickProfile) -> Result<(), String> {
     if profile.press_duration_ms != FIXED_PRESS_DURATION_MS {
         return Err("按下时长固定为 5 毫秒".into());
     }
-    if matches!(profile.repeat_mode, RepeatMode::Count)
-        && !(1..=10_000_000).contains(&profile.repeat_count)
-    {
-        return Err("点击次数必须在 1 至 10000000 之间".into());
+    if profile.repeat_count > 10_000_000 {
+        return Err("点击次数必须在 0 至 10000000 之间".into());
     }
     for target in &profile.targets {
         if target.x < -100_000 || target.x > 100_000 || target.y < -100_000 || target.y > 100_000 {
@@ -182,13 +180,15 @@ pub fn start_clicking(
     }
     {
         let mut status = runtime.status.lock().map_err(|_| "点击器状态锁定失败")?;
+        let infinite =
+            matches!(profile.repeat_mode, RepeatMode::Infinite) || profile.repeat_count == 0;
         *status = ClickerStatus {
             state: "running".into(),
             completed: 0,
-            target_count: if matches!(profile.repeat_mode, RepeatMode::Count) {
-                Some(profile.repeat_count)
-            } else {
+            target_count: if infinite {
                 None
+            } else {
+                Some(profile.repeat_count)
             },
             error: None,
         };
@@ -217,6 +217,8 @@ pub fn start_clicking(
                 .collect()
         };
         let mut completed = 0u64;
+        let infinite =
+            matches!(profile.repeat_mode, RepeatMode::Infinite) || profile.repeat_count == 0;
         loop {
             if cancel.load(Ordering::Relaxed) {
                 break;
@@ -243,8 +245,7 @@ pub fn start_clicking(
                 status.completed = completed;
             }
             let _ = app.emit(CLICKER_PROGRESS_EVENT, completed);
-            if matches!(profile.repeat_mode, RepeatMode::Count) && completed >= profile.repeat_count
-            {
+            if !infinite && completed >= profile.repeat_count {
                 break;
             }
             let gap = profile
@@ -404,6 +405,13 @@ mod tests {
     fn allows_infinite_mode_without_repeat_count() {
         let mut value = profile();
         value.repeat_mode = RepeatMode::Infinite;
+        value.repeat_count = 0;
+        assert!(validate(&value).is_ok());
+    }
+
+    #[test]
+    fn allows_zero_repeat_count_as_infinite() {
+        let mut value = profile();
         value.repeat_count = 0;
         assert!(validate(&value).is_ok());
     }

@@ -94,6 +94,10 @@ const DEFAULT_PROFILE: ClickProfile = {
 
 function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
   const profile = { ...DEFAULT_PROFILE, ...value };
+  const repeatMode =
+    profile.repeatMode === "infinite" || profile.repeatCount === 0
+      ? "infinite"
+      : "count";
   return {
     ...profile,
     intervalMs: Number.isFinite(profile.intervalMs)
@@ -101,6 +105,8 @@ function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
       : DEFAULT_PROFILE.intervalMs,
     pressDurationMs: FIXED_PRESS_DURATION_MS,
     button: profile.button === "right" ? "right" : "left",
+    repeatMode,
+    repeatCount: repeatMode === "infinite" ? 0 : profile.repeatCount,
     targets: profile.targets ?? [],
   };
 }
@@ -675,6 +681,12 @@ function ClickerPage({
     key: K,
     value: ClickProfile[K],
   ) => setProfile((current) => ({ ...current, [key]: value }));
+  const updateRepeatCount = (repeatCount: number) =>
+    setProfile((current) => ({
+      ...current,
+      repeatCount,
+      repeatMode: repeatCount === 0 ? "infinite" : "count",
+    }));
   const selectArea = async () => {
     setMessage("拖拽生成区域后可移动，双击区域确认选择");
     try {
@@ -933,20 +945,18 @@ function ClickerPage({
                 }
               />
             </label>
-            {profile.repeatMode === "count" && (
-              <label>
-                点击次数
-                <input
-                  type="number"
-                  min={1}
-                  max={10000000}
-                  value={profile.repeatCount}
-                  onChange={(event) =>
-                    update("repeatCount", Number(event.target.value))
-                  }
-                />
-              </label>
-            )}
+            <label>
+              点击次数（0 表示无限）
+              <input
+                type="number"
+                min={0}
+                max={10000000}
+                value={profile.repeatCount}
+                onChange={(event) =>
+                  updateRepeatCount(Number(event.target.value))
+                }
+              />
+            </label>
             <label>
               鼠标按键
               <select
@@ -959,21 +969,11 @@ function ClickerPage({
                 <option value="right">右键</option>
               </select>
             </label>
-            <label>
-              执行次数
-              <select
-                value={profile.repeatMode}
-                onChange={(event) =>
-                  update("repeatMode", event.target.value as RepeatMode)
-                }
-              >
-                <option value="count">指定次数</option>
-                <option value="infinite">无限循环</option>
-              </select>
-            </label>
           </div>
           <p className="hint">
-            点击间隔指两次按下开始之间的时间，按下时长固定为 5 毫秒。
+            点击次数为 0
+            时无限循环；点击间隔指两次按下开始之间的时间，按下时长固定为 5
+            毫秒。
           </p>
         </div>
         <div className="card profile-card">
