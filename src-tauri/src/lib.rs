@@ -43,6 +43,8 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            // Remove the login-item entry created by older GoTap versions.
+            let _ = auto_launch::set(false);
             let show_window =
                 MenuItem::with_id(app, SHOW_WINDOW_MENU_ID, "显示 GoTap", true, None::<&str>)?;
             let toggle_clicker = MenuItem::with_id(
@@ -124,8 +126,6 @@ pub fn run() {
             commands::close_selection_windows,
             commands::load_settings,
             commands::save_settings,
-            commands::set_auto_launch,
-            commands::get_auto_launch_status,
             commands::open_accessibility_settings
         ])
         .build(tauri::generate_context!())

@@ -9,10 +9,6 @@ fn launcher() -> Result<AutoLaunch, String> {
         .map_err(|error| error.to_string())
 }
 
-pub fn get() -> Result<bool, String> {
-    launcher()?.is_enabled().map_err(|error| error.to_string())
-}
-
 pub fn set(enabled: bool) -> Result<(), String> {
     let launcher = launcher()?;
     if enabled {

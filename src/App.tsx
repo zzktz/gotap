@@ -496,7 +496,6 @@ function ClickerPage({
     targetCount: null,
     error: null,
   });
-  const [autoLaunch, setAutoLaunch] = useState(false);
   const [message, setMessage] = useState("");
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [hasAvailableUpdate, setHasAvailableUpdate] = useState(false);
@@ -610,9 +609,6 @@ function ClickerPage({
       .then((value) => {
         if (value) setProfile(normalizeProfile(value));
       })
-      .catch(() => undefined);
-    void invoke<boolean>("get_auto_launch_status")
-      .then(setAutoLaunch)
       .catch(() => undefined);
     void invoke<ClickerStatus>("get_clicker_status")
       .then(setStatus)
@@ -805,13 +801,6 @@ function ClickerPage({
     });
     return () => dispose?.();
   }, [running, profile]);
-  const toggleAutoLaunch = async (enabled: boolean) => {
-    try {
-      setAutoLaunch(await invoke<boolean>("set_auto_launch", { enabled }));
-    } catch (error) {
-      setMessage(formatErrorMessage(error));
-    }
-  };
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -1090,14 +1079,6 @@ function ClickerPage({
           )}
         </div>
         <div className="settings-row">
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={autoLaunch}
-              onChange={(event) => void toggleAutoLaunch(event.target.checked)}
-            />
-            登录系统后自动启动
-          </label>
           <span className="privacy">所有坐标和参数仅保存在本机</span>
         </div>
         <div className="shortcut-card">

@@ -1,4 +1,3 @@
-use crate::auto_launch;
 use enigo::{Button, Coordinate, Direction, Enigo, Mouse, Settings};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -415,16 +414,6 @@ mod tests {
         value.repeat_count = 0;
         assert!(validate(&value).is_ok());
     }
-}
-
-#[tauri::command]
-pub fn set_auto_launch(enabled: bool) -> Result<bool, String> {
-    auto_launch::set(enabled).map(|_| enabled)
-}
-
-#[tauri::command]
-pub fn get_auto_launch_status() -> Result<bool, String> {
-    auto_launch::get()
 }
 
 #[tauri::command]
