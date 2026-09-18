@@ -42,6 +42,9 @@ jobs:
              [ -z "${{ secrets.APPLE_API_PRIVATE_KEY }}" ]; then
             echo "Apple signing secrets are incomplete; building unsigned macOS artifacts."
             echo "APPLE_SIGNING_ENABLED=false" >> "$GITHUB_ENV"
+            # Tauri otherwise receives an empty identity and fails with a
+            # keychain lookup error. '-' requests an ad-hoc local signature.
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
             exit 0
           fi
 
