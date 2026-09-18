@@ -63,6 +63,8 @@ interface RunLog {
 
 const SAVED_PROFILES_KEY = "gotap.savedProfiles.v1";
 const RUN_LOGS_KEY = "gotap.runLogs.v1";
+const MIN_INTERVAL_MS = 100;
+const FIXED_PRESS_DURATION_MS = 5;
 interface ClickerStatus {
   state: "idle" | "running" | "stopped" | "completed" | "error";
   completed: number;
@@ -83,12 +85,24 @@ const DEFAULT_PROFILE: ClickProfile = {
   width: 0,
   height: 0,
   intervalMs: 1000,
-  pressDurationMs: 100,
+  pressDurationMs: FIXED_PRESS_DURATION_MS,
   repeatMode: "count",
   repeatCount: 10,
   button: "left",
   targets: [],
 };
+
+function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
+  const profile = { ...DEFAULT_PROFILE, ...value };
+  return {
+    ...profile,
+    intervalMs: Number.isFinite(profile.intervalMs)
+      ? Math.max(MIN_INTERVAL_MS, profile.intervalMs)
+      : DEFAULT_PROFILE.intervalMs,
+    pressDurationMs: FIXED_PRESS_DURATION_MS,
+    targets: profile.targets ?? [],
+  };
+}
 
 function CursorLogo() {
   return <img className="cursor-logo" src={logoUrl} alt="GoTap 鼠标箭头标志" />;
@@ -587,12 +601,7 @@ function ClickerPage({
   useEffect(() => {
     void invoke<ClickProfile | null>("load_settings")
       .then((value) => {
-        if (value)
-          setProfile({
-            ...DEFAULT_PROFILE,
-            ...value,
-            targets: value.targets ?? [],
-          });
+        if (value) setProfile(normalizeProfile(value));
       })
       .catch(() => undefined);
     void invoke<boolean>("get_auto_launch_status")
@@ -702,7 +711,9 @@ function ClickerPage({
       setMessage("请输入方案名称");
       return;
     }
-    const snapshot = JSON.parse(JSON.stringify(profile)) as ClickProfile;
+    const snapshot = normalizeProfile(
+      JSON.parse(JSON.stringify(profile)) as ClickProfile,
+    );
     const next = savedProfiles.filter((item) => item.name !== name);
     next.push({ name, profile: snapshot });
     persistProfiles(next);
@@ -712,11 +723,7 @@ function ClickerPage({
   const loadNamedProfile = (name: string) => {
     const item = savedProfiles.find((value) => value.name === name);
     if (!item) return;
-    setProfile({
-      ...DEFAULT_PROFILE,
-      ...item.profile,
-      targets: item.profile.targets ?? [],
-    });
+    setProfile(normalizeProfile(item.profile));
     setProfileName(name);
     setMessage(`已切换到方案“${name}”`);
   };
@@ -741,9 +748,11 @@ function ClickerPage({
   const totalClicks = runLogs.reduce((sum, log) => sum + log.clicks, 0);
   const start = async () => {
     setMessage("");
+    const effectiveProfile = normalizeProfile(profile);
+    setProfile(effectiveProfile);
     try {
-      await invoke("save_settings", { profile });
-      await invoke("start_clicking", { profile });
+      await invoke("save_settings", { profile: effectiveProfile });
+      await invoke("start_clicking", { profile: effectiveProfile });
     } catch (error) {
       setMessage(formatErrorMessage(error));
     }
@@ -915,24 +924,13 @@ function ClickerPage({
           <p className="eyebrow">点击参数</p>
           <div className="grid">
             <label>
-              点击间隔（毫秒）
+              点击间隔（毫秒，最小 100）
               <input
                 type="number"
-                min={10}
+                min={MIN_INTERVAL_MS}
                 value={profile.intervalMs}
                 onChange={(event) =>
                   update("intervalMs", Number(event.target.value))
-                }
-              />
-            </label>
-            <label>
-              按下时长（毫秒）
-              <input
-                type="number"
-                min={1}
-                value={profile.pressDurationMs}
-                onChange={(event) =>
-                  update("pressDurationMs", Number(event.target.value))
                 }
               />
             </label>
@@ -977,7 +975,7 @@ function ClickerPage({
             )}
           </div>
           <p className="hint">
-            点击间隔指两次按下开始之间的时间，按下时长必须小于点击间隔。
+            点击间隔指两次按下开始之间的时间，按下时长固定为 5 毫秒。
           </p>
         </div>
         <div className="card profile-card">

@@ -15,6 +15,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 pub const CLICKER_STATUS_EVENT: &str = "clicker:status";
 pub const CLICKER_PROGRESS_EVENT: &str = "clicker:progress";
+const MIN_INTERVAL_MS: u64 = 100;
+const FIXED_PRESS_DURATION_MS: u64 = 5;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,11 +105,11 @@ fn validate(profile: &ClickProfile) -> Result<(), String> {
     if profile.x < -100_000 || profile.x > 100_000 || profile.y < -100_000 || profile.y > 100_000 {
         return Err("点击坐标超出有效范围".into());
     }
-    if profile.interval_ms < 10 || profile.interval_ms > 86_400_000 {
-        return Err("点击间隔必须在 10 毫秒至 24 小时之间".into());
+    if profile.interval_ms < MIN_INTERVAL_MS || profile.interval_ms > 86_400_000 {
+        return Err("点击间隔必须在 100 毫秒至 24 小时之间".into());
     }
-    if profile.press_duration_ms == 0 || profile.press_duration_ms >= profile.interval_ms {
-        return Err("按下时长必须大于 0 且小于点击间隔".into());
+    if profile.press_duration_ms != FIXED_PRESS_DURATION_MS {
+        return Err("按下时长固定为 5 毫秒".into());
     }
     if matches!(profile.repeat_mode, RepeatMode::Count)
         && !(1..=10_000_000).contains(&profile.repeat_count)
@@ -364,7 +366,7 @@ mod tests {
             width: 0,
             height: 0,
             interval_ms: 1_000,
-            press_duration_ms: 100,
+            press_duration_ms: FIXED_PRESS_DURATION_MS,
             repeat_mode: RepeatMode::Count,
             repeat_count: 3,
             button: ClickButton::Left,
@@ -378,9 +380,23 @@ mod tests {
     }
 
     #[test]
-    fn rejects_press_duration_longer_than_interval() {
+    fn rejects_press_duration_equal_to_interval() {
         let mut value = profile();
         value.press_duration_ms = value.interval_ms;
+        assert!(validate(&value).is_err());
+    }
+
+    #[test]
+    fn rejects_interval_shorter_than_minimum() {
+        let mut value = profile();
+        value.interval_ms = MIN_INTERVAL_MS - 1;
+        assert!(validate(&value).is_err());
+    }
+
+    #[test]
+    fn rejects_non_fixed_press_duration() {
+        let mut value = profile();
+        value.press_duration_ms = FIXED_PRESS_DURATION_MS + 1;
         assert!(validate(&value).is_err());
     }
 
