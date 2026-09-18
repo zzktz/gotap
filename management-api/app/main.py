@@ -93,6 +93,17 @@ logger = logging.getLogger(__name__)
 _maintenance_stop = threading.Event()
 _maintenance_thread: threading.Thread | None = None
 
+# The production container inherits HTTP(S)_PROXY from the host.  That proxy
+# is bound to the host loopback address and is not reachable from inside the
+# container, so urllib would fail before it can contact GitHub.  Release
+# imports use GitHub's HTTPS API directly; bypass inherited proxy variables
+# for these requests while leaving the rest of the process environment intact.
+_github_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def _github_urlopen(request: urllib.request.Request, *, timeout: int):
+    return _github_opener.open(request, timeout=timeout)
+
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
@@ -1351,7 +1362,7 @@ def _github_json(url: str) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with _github_urlopen(request, timeout=10) as response:
             return json.loads(response.read().decode("utf-8"))
     except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="暂时无法读取版本发布信息") from error
@@ -1366,7 +1377,7 @@ def _github_text(url: str) -> str:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with _github_urlopen(request, timeout=10) as response:
             return response.read().decode("utf-8").strip()
     except (OSError, urllib.error.URLError, UnicodeDecodeError) as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="暂时无法读取版本签名") from error
@@ -2233,7 +2244,7 @@ def _download_github_asset(asset: dict, destination: Path) -> tuple[int, str]:
     digest = hashlib.sha256()
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with urllib.request.urlopen(request, timeout=60) as response, temporary.open("wb") as handle:
+        with _github_urlopen(request, timeout=60) as response, temporary.open("wb") as handle:
             while chunk := response.read(1024 * 1024):
                 total += len(chunk)
                 if total > UPDATE_MAX_ASSET_BYTES:
