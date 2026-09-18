@@ -509,6 +509,10 @@ footer {
   color: #7d8d9c;
   font-size: 11px;
 }
+/* Temporarily hide saved task profiles while keeping their data and logic. */
+.profile-card {
+  display: none;
+}
 .profile-row {
   display: flex;
   gap: 8px;
