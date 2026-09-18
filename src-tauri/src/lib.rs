@@ -80,12 +80,13 @@ pub fn run() {
                 });
 
             #[cfg(target_os = "macos")]
-            let tray_builder = tray_builder.icon(
-                tauri::image::Image::from_bytes(include_bytes!(
-                    "../icons/tray/macos/statusTemplate@2x.png"
+            // Use a macOS template image so the system applies the appropriate
+            // foreground color for light and dark menu-bar appearances.
+            let tray_builder = tray_builder
+                .icon(tauri::include_image!(
+                    "icons/tray/macos/statusbar_template_3x.png"
                 ))
-                .expect("invalid macOS tray icon"),
-            );
+                .icon_as_template(true);
             #[cfg(not(target_os = "macos"))]
             let tray_builder = tray_builder.icon(
                 app.default_window_icon()
