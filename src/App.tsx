@@ -84,7 +84,7 @@ const DEFAULT_PROFILE: ClickProfile = {
   y: 0,
   width: 0,
   height: 0,
-  intervalMs: 1000,
+  intervalMs: MIN_INTERVAL_MS,
   pressDurationMs: FIXED_PRESS_DURATION_MS,
   repeatMode: "count",
   repeatCount: 10,
