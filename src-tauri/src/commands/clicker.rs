@@ -16,6 +16,7 @@ pub const CLICKER_STATUS_EVENT: &str = "clicker:status";
 pub const CLICKER_PROGRESS_EVENT: &str = "clicker:progress";
 const MIN_INTERVAL_MS: u64 = 100;
 const FIXED_PRESS_DURATION_MS: u64 = 5;
+const START_DELAY_MS: u64 = 3_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,8 +121,8 @@ fn validate(profile: &ClickProfile) -> Result<(), String> {
     if profile.press_duration_ms != FIXED_PRESS_DURATION_MS {
         return Err("按下时长固定为 5 毫秒".into());
     }
-    if profile.repeat_count > 10_000_000 {
-        return Err("点击次数必须在 0 至 10000000 之间".into());
+    if profile.repeat_count > 999_999 {
+        return Err("点击次数必须在 0 至 999999 之间".into());
     }
     for target in &profile.targets {
         if target.x < -100_000 || target.x > 100_000 || target.y < -100_000 || target.y > 100_000 {
@@ -131,7 +132,15 @@ fn validate(profile: &ClickProfile) -> Result<(), String> {
     Ok(())
 }
 
-fn interruptible_sleep(cancel: &AtomicBool, duration: Duration) -> bool {
+fn input_button(button: &ClickButton) -> Button {
+    match button {
+        ClickButton::Left => Button::Left,
+        ClickButton::Right => Button::Right,
+        ClickButton::Middle => Button::Middle,
+    }
+}
+
+fn interruptible_delay(cancel: &AtomicBool, duration: Duration) -> bool {
     let deadline = Instant::now() + duration;
     while !cancel.load(Ordering::Relaxed) {
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -141,14 +150,6 @@ fn interruptible_sleep(cancel: &AtomicBool, duration: Duration) -> bool {
         thread::sleep(remaining.min(Duration::from_millis(5)));
     }
     false
-}
-
-fn input_button(button: &ClickButton) -> Button {
-    match button {
-        ClickButton::Left => Button::Left,
-        ClickButton::Right => Button::Right,
-        ClickButton::Middle => Button::Middle,
-    }
 }
 
 fn random_seed() -> u64 {
@@ -195,6 +196,48 @@ fn resolve_click_point(
             random_coordinate(y, height, state),
         ),
     }
+}
+
+fn point_inside_target(point: (i32, i32), target: (i32, i32, u32, u32)) -> bool {
+    let (point_x, point_y) = point;
+    let (center_x, center_y, width, height) = target;
+    let half_width = (width / 2) as i64;
+    let half_height = (height / 2) as i64;
+    let point_x = point_x as i64;
+    let point_y = point_y as i64;
+    let center_x = center_x as i64;
+    let center_y = center_y as i64;
+    point_x >= center_x - half_width
+        && point_x <= center_x - half_width + width as i64
+        && point_y >= center_y - half_height
+        && point_y <= center_y - half_height + height as i64
+}
+
+enum CursorSleepResult {
+    Completed,
+    Cancelled,
+    LeftTarget,
+}
+
+fn interruptible_sleep_with_cursor_check(
+    cancel: &AtomicBool,
+    duration: Duration,
+    enigo: &mut Enigo,
+    target: (i32, i32, u32, u32),
+) -> Result<CursorSleepResult, String> {
+    let deadline = Instant::now() + duration;
+    while !cancel.load(Ordering::Relaxed) {
+        let cursor = enigo.location().map_err(|error| error.to_string())?;
+        if !point_inside_target(cursor, target) {
+            return Ok(CursorSleepResult::LeftTarget);
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ok(CursorSleepResult::Completed);
+        }
+        thread::sleep(remaining.min(Duration::from_millis(5)));
+    }
+    Ok(CursorSleepResult::Cancelled)
 }
 
 pub fn stop_clicking(runtime: &ClickerRuntime) {
@@ -261,6 +304,15 @@ pub fn start_clicking(
                 return;
             }
         };
+        if !interruptible_delay(&cancel, Duration::from_millis(START_DELAY_MS)) {
+            if let Ok(mut status) = runtime.status.lock() {
+                if status.state == "running" {
+                    status.state = "stopped".into();
+                }
+            }
+            emit_status(&app, &runtime);
+            return;
+        }
         let button = input_button(&profile.button);
         let targets = if profile.targets.is_empty() {
             vec![(profile.x, profile.y, profile.width, profile.height)]
@@ -275,6 +327,7 @@ pub fn start_clicking(
         let mut random_state = random_seed();
         let infinite =
             matches!(profile.repeat_mode, RepeatMode::Infinite) || profile.repeat_count == 0;
+        let mut left_target = false;
         loop {
             if cancel.load(Ordering::Relaxed) {
                 break;
@@ -291,11 +344,28 @@ pub fn start_clicking(
                 }
                 break;
             }
-            let press_completed =
-                interruptible_sleep(&cancel, Duration::from_millis(profile.press_duration_ms));
+            let press_result = interruptible_sleep_with_cursor_check(
+                &cancel,
+                Duration::from_millis(profile.press_duration_ms),
+                &mut enigo,
+                target,
+            );
             let _ = enigo.button(button, Direction::Release);
-            if !press_completed {
-                break;
+            match press_result {
+                Ok(CursorSleepResult::Completed) => {}
+                Ok(CursorSleepResult::Cancelled) => break,
+                Ok(CursorSleepResult::LeftTarget) => {
+                    left_target = true;
+                    cancel.store(true, Ordering::Relaxed);
+                    break;
+                }
+                Err(error) => {
+                    if let Ok(mut status) = runtime.status.lock() {
+                        status.state = "error".into();
+                        status.error = Some(error);
+                    }
+                    break;
+                }
             }
             completed += 1;
             if let Ok(mut status) = runtime.status.lock() {
@@ -308,12 +378,33 @@ pub fn start_clicking(
             let gap = profile
                 .interval_ms
                 .saturating_sub(profile.press_duration_ms);
-            if !interruptible_sleep(&cancel, Duration::from_millis(gap)) {
-                break;
+            match interruptible_sleep_with_cursor_check(
+                &cancel,
+                Duration::from_millis(gap),
+                &mut enigo,
+                target,
+            ) {
+                Ok(CursorSleepResult::Completed) => {}
+                Ok(CursorSleepResult::Cancelled) => break,
+                Ok(CursorSleepResult::LeftTarget) => {
+                    left_target = true;
+                    cancel.store(true, Ordering::Relaxed);
+                    break;
+                }
+                Err(error) => {
+                    if let Ok(mut status) = runtime.status.lock() {
+                        status.state = "error".into();
+                        status.error = Some(error);
+                    }
+                    break;
+                }
             }
         }
         if let Ok(mut status) = runtime.status.lock() {
-            if status.state == "running" {
+            if left_target {
+                status.state = "stopped".into();
+                status.error = Some("鼠标移出点击区域，已自动停止".into());
+            } else if status.state == "running" {
                 status.state = if cancel.load(Ordering::Relaxed) {
                     "stopped"
                 } else {
@@ -492,6 +583,15 @@ mod tests {
             resolve_click_point((100, 200, 0, 0), &ClickPosition::Random, &mut state),
             (100, 200)
         );
+    }
+
+    #[test]
+    fn cursor_boundary_matches_selected_target() {
+        let target = (100, 200, 20, 10);
+        assert!(point_inside_target((90, 195), target));
+        assert!(point_inside_target((110, 205), target));
+        assert!(!point_inside_target((89, 200), target));
+        assert!(!point_inside_target((100, 206), target));
     }
 }
 

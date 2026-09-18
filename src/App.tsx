@@ -8,6 +8,14 @@ import {
   type Update,
 } from "@tauri-apps/plugin-updater";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  Chip,
+  Input,
+  Select,
+  SelectItem,
+} from "@heroui/react";
 import appPackage from "../package.json";
 import logoUrl from "./logo.svg";
 import {
@@ -15,10 +23,7 @@ import {
   formatErrorMessage,
   getAuthSettings,
   getRememberedLogin,
-  getSession,
   login,
-  logout,
-  refreshSession,
   register,
   requestPasswordResetCode,
   requestRegistrationCode,
@@ -28,6 +33,7 @@ import {
 import type { AuthSession } from "./auth";
 
 type Mode = "login" | "register" | "forgot";
+type InfoPanel = "help" | "logs" | null;
 type RepeatMode = "count" | "infinite";
 type ClickButton = "left" | "right" | "middle";
 type ClickPosition = "center" | "random";
@@ -65,8 +71,11 @@ interface RunLog {
 
 const SAVED_PROFILES_KEY = "gotap.savedProfiles.v1";
 const RUN_LOGS_KEY = "gotap.runLogs.v1";
+const SETTINGS_MIGRATION_KEY = "gotap.settings.v2";
 const MIN_INTERVAL_MS = 100;
+const MAX_REPEAT_COUNT = 999_999;
 const FIXED_PRESS_DURATION_MS = 5;
+const START_DELAY_SECONDS = 3;
 interface ClickerStatus {
   state: "idle" | "running" | "stopped" | "completed" | "error";
   completed: number;
@@ -89,7 +98,7 @@ const DEFAULT_PROFILE: ClickProfile = {
   intervalMs: MIN_INTERVAL_MS,
   pressDurationMs: FIXED_PRESS_DURATION_MS,
   repeatMode: "count",
-  repeatCount: 10,
+  repeatCount: 3000,
   button: "left",
   clickPosition: "center",
   targets: [],
@@ -110,13 +119,39 @@ function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
     button: profile.button === "right" ? "right" : "left",
     clickPosition: profile.clickPosition === "random" ? "random" : "center",
     repeatMode,
-    repeatCount: repeatMode === "infinite" ? 0 : profile.repeatCount,
+    repeatCount:
+      repeatMode === "infinite"
+        ? 0
+        : Math.min(MAX_REPEAT_COUNT, Math.max(0, profile.repeatCount)),
     targets: profile.targets ?? [],
   };
 }
 
 function CursorLogo() {
   return <img className="cursor-logo" src={logoUrl} alt="GoTap 鼠标箭头标志" />;
+}
+
+function FieldLabel({
+  children,
+  description,
+}: {
+  children: string;
+  description: string;
+}) {
+  return (
+    <span className="field-label" title={description}>
+      {children}
+      <span
+        className="field-help"
+        aria-label={`${children}说明`}
+        data-tooltip={description}
+        tabIndex={0}
+        title={description}
+      >
+        ?
+      </span>
+    </span>
+  );
 }
 
 function SelectionOverlay() {
@@ -389,76 +424,91 @@ function AuthPage({
         </h1>
         <form onSubmit={(event) => void submit(event)} className="form">
           {mode === "register" && (
-            <label>
-              姓名
-              <input
-                value={name}
-                maxLength={10}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="可选"
-              />
-            </label>
-          )}
-          <label>
-            邮箱
-            <input
-              required
-              type="email"
-              value={email}
-              readOnly={mode === "forgot"}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
+            <Input
+              className="hero-input"
+              label="姓名"
+              labelPlacement="outside"
+              maxLength={10}
+              onValueChange={setName}
+              placeholder="可选"
+              size="sm"
+              value={name}
+              variant="bordered"
             />
-          </label>
+          )}
+          <Input
+            className="hero-input"
+            isReadOnly={mode === "forgot"}
+            isRequired
+            label="邮箱"
+            labelPlacement="outside"
+            onValueChange={setEmail}
+            placeholder="you@example.com"
+            size="sm"
+            type="email"
+            value={email}
+            variant="bordered"
+          />
           {(mode === "register" || mode === "forgot") && (
-            <label>
-              验证码
+            <div className="form-field">
               <div className="code-row">
-                <input
-                  required
+                <Input
+                  className="hero-input"
+                  classNames={{ inputWrapper: "code-input-wrapper" }}
+                  isRequired
                   inputMode="numeric"
+                  label="验证码"
+                  labelPlacement="outside"
                   maxLength={6}
-                  value={code}
-                  onChange={(event) =>
-                    setCode(event.target.value.replace(/\D/g, ""))
-                  }
+                  onValueChange={(value) => setCode(value.replace(/\D/g, ""))}
                   placeholder="6 位验证码"
+                  size="sm"
+                  value={code}
+                  variant="bordered"
                 />
-                <button
+                <Button
+                  className="hero-button code-button"
+                  isDisabled={busy || countdown > 0}
+                  onPress={() => void sendCode()}
                   type="button"
-                  className="secondary"
-                  disabled={busy || countdown > 0}
-                  onClick={() => void sendCode()}
+                  variant="bordered"
                 >
                   {countdown ? `${countdown}s 后重发` : "发送验证码"}
-                </button>
+                </Button>
               </div>
-            </label>
+            </div>
           )}
-          <label>
-            密码
-            <input
-              required
-              minLength={8}
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="至少 8 位"
-            />
-          </label>
+          <Input
+            className="hero-input"
+            isRequired
+            label="密码"
+            labelPlacement="outside"
+            minLength={8}
+            onValueChange={setPassword}
+            placeholder="至少 8 位"
+            size="sm"
+            type="password"
+            value={password}
+            variant="bordered"
+          />
           {mode === "login" && (
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(event) => setRemember(event.target.checked)}
-              />
+            <Checkbox
+              className="remember-checkbox"
+              isSelected={remember}
+              onValueChange={setRemember}
+              size="sm"
+            >
               记住登录信息
-            </label>
+            </Checkbox>
           )}
           {error && <p className="error">{error}</p>}
           {message && <p className="success">{message}</p>}
-          <button className="primary" disabled={busy}>
+          <Button
+            className="hero-button auth-submit"
+            color="primary"
+            isDisabled={busy}
+            type="submit"
+          >
             {busy
               ? "处理中…"
               : mode === "login"
@@ -466,7 +516,7 @@ function AuthPage({
                 : mode === "register"
                   ? "注册并登录"
                   : "重置密码"}
-          </button>
+          </Button>
         </form>
         <div className="auth-links">
           {mode === "login" && (
@@ -486,13 +536,7 @@ function AuthPage({
   );
 }
 
-function ClickerPage({
-  session,
-  onLogout,
-}: {
-  session: AuthSession;
-  onLogout: () => void;
-}) {
+function ClickerPage() {
   const [profile, setProfile] = useState<ClickProfile>(DEFAULT_PROFILE);
   const [status, setStatus] = useState<ClickerStatus>({
     state: "idle",
@@ -501,6 +545,8 @@ function ClickerPage({
     error: null,
   });
   const [message, setMessage] = useState("");
+  const [startCountdown, setStartCountdown] = useState(0);
+  const [infoPanel, setInfoPanel] = useState<InfoPanel>(null);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [hasAvailableUpdate, setHasAvailableUpdate] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -611,7 +657,29 @@ function ClickerPage({
   useEffect(() => {
     void invoke<ClickProfile | null>("load_settings")
       .then((value) => {
-        if (value) setProfile(normalizeProfile(value));
+        if (!value) return;
+
+        const loaded = normalizeProfile(value);
+        // 999999 was briefly used as the default before the current default
+        // was settled at 3000. Migrate that old untouched value once, while
+        // preserving a user's intentional choice of 999999 afterwards.
+        let next = loaded;
+        if (
+          value.repeatMode === "count" &&
+          value.repeatCount === MAX_REPEAT_COUNT &&
+          !localStorage.getItem(SETTINGS_MIGRATION_KEY)
+        ) {
+          next = {
+            ...loaded,
+            repeatCount: DEFAULT_PROFILE.repeatCount,
+            repeatMode: "count",
+          };
+          void invoke("save_settings", { profile: next }).catch(
+            () => undefined,
+          );
+        }
+        localStorage.setItem(SETTINGS_MIGRATION_KEY, "1");
+        setProfile(next);
       })
       .catch(() => undefined);
     void invoke<ClickerStatus>("get_clicker_status")
@@ -623,17 +691,21 @@ function ClickerPage({
     ).then((unlisten) => {
       dispose = unlisten;
     });
+    let disposeProgress: (() => void) | undefined;
+    void listen<number>("clicker:progress", (event) =>
+      setStatus((current) => ({ ...current, completed: event.payload })),
+    ).then((unlisten) => {
+      disposeProgress = unlisten;
+    });
     let disposeSelection: (() => void) | undefined;
     void listen<SelectionPayload>("selection:completed", (event) => {
       setProfile((current) => ({ ...current, ...event.payload }));
-      setMessage(
-        `已选择区域中心 (${event.payload.x}, ${event.payload.y})，大小 ${event.payload.width} × ${event.payload.height}`,
-      );
     }).then((unlisten) => {
       disposeSelection = unlisten;
     });
     return () => {
       dispose?.();
+      disposeProgress?.();
       disposeSelection?.();
     };
   }, []);
@@ -681,12 +753,14 @@ function ClickerPage({
     key: K,
     value: ClickProfile[K],
   ) => setProfile((current) => ({ ...current, [key]: value }));
-  const updateRepeatCount = (repeatCount: number) =>
+  const updateRepeatCount = (repeatCount: number) => {
+    const normalized = Math.min(MAX_REPEAT_COUNT, Math.max(0, repeatCount));
     setProfile((current) => ({
       ...current,
-      repeatCount,
-      repeatMode: repeatCount === 0 ? "infinite" : "count",
+      repeatCount: normalized,
+      repeatMode: normalized === 0 ? "infinite" : "count",
     }));
+  };
   const selectArea = async () => {
     setMessage("拖拽生成区域后可移动，双击区域确认选择");
     try {
@@ -694,21 +768,6 @@ function ClickerPage({
     } catch (error) {
       setMessage(formatErrorMessage(error));
     }
-  };
-  const addCurrentTarget = () => {
-    setProfile((current) => ({
-      ...current,
-      targets: [
-        ...current.targets,
-        {
-          x: current.x,
-          y: current.y,
-          width: current.width,
-          height: current.height,
-        },
-      ],
-    }));
-    setMessage(`已添加第 ${profile.targets.length + 1} 个点击步骤`);
   };
   const removeTarget = (index: number) => {
     setProfile((current) => ({
@@ -759,23 +818,37 @@ function ClickerPage({
       minute: "2-digit",
     });
   const totalClicks = runLogs.reduce((sum, log) => sum + log.clicks, 0);
+  useEffect(() => {
+    if (startCountdown <= 0) return undefined;
+    const timer = window.setInterval(
+      () => setStartCountdown((value) => Math.max(value - 1, 0)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [startCountdown]);
   const start = async () => {
     setMessage("");
+    setStartCountdown(START_DELAY_SECONDS);
     const effectiveProfile = normalizeProfile(profile);
     setProfile(effectiveProfile);
     try {
       await invoke("save_settings", { profile: effectiveProfile });
       await invoke("start_clicking", { profile: effectiveProfile });
     } catch (error) {
+      setStartCountdown(0);
       setMessage(formatErrorMessage(error));
     }
   };
   const stop = () => {
+    setStartCountdown(0);
     void invoke("stop_clicking_command").catch((error) =>
       setMessage(formatErrorMessage(error)),
     );
   };
   const running = status.state === "running";
+  useEffect(() => {
+    if (status.state !== "running") setStartCountdown(0);
+  }, [status.state]);
   useEffect(() => {
     let disposeToggle: (() => void) | undefined;
     let disposeStop: (() => void) | undefined;
@@ -809,7 +882,7 @@ function ClickerPage({
     <main className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">
+          <div className={`brand-mark${running ? " is-running" : ""}`}>
             <CursorLogo />
           </div>
           <div>
@@ -833,9 +906,23 @@ function ClickerPage({
             <small className="brand-subtitle">桌面自动点击器</small>
           </div>
         </div>
-        <div className="account">
-          <span>{session.user.name || session.user.email}</span>
-          <button onClick={() => void logout().finally(onLogout)}>退出</button>
+        <div className="topbar-actions">
+          <Button
+            className="topbar-action"
+            onPress={() => setInfoPanel("help")}
+            size="sm"
+            variant="light"
+          >
+            帮助
+          </Button>
+          <Button
+            className="topbar-action"
+            onPress={() => setInfoPanel("logs")}
+            size="sm"
+            variant="light"
+          >
+            记录
+          </Button>
         </div>
       </header>
       <section className="content">
@@ -843,17 +930,36 @@ function ClickerPage({
           <div className="section-heading">
             <div>
               <p className="eyebrow">目标位置</p>
-              <h2>选择点击区域</h2>
             </div>
-            {!["idle", "stopped"].includes(status.state) && (
-              <span className={`state state-${status.state}`}>
-                {running
-                  ? "运行中"
-                  : status.state === "completed"
-                    ? "已完成"
-                    : "错误"}
-              </span>
-            )}
+            <div className="target-heading-actions">
+              <Button
+                className="hero-button primary-action-button target-select-button"
+                color="primary"
+                isDisabled={running}
+                onPress={() => void selectArea()}
+              >
+                选择区域
+              </Button>
+              {!["idle", "stopped"].includes(status.state) && (
+                <Chip
+                  color={
+                    running
+                      ? "success"
+                      : status.state === "completed"
+                        ? "primary"
+                        : "danger"
+                  }
+                  size="sm"
+                  variant="flat"
+                >
+                  {running
+                    ? "运行中"
+                    : status.state === "completed"
+                      ? "已完成"
+                      : "错误"}
+                </Chip>
+              )}
+            </div>
           </div>
           <div className="coordinates">
             <span>坐标</span>
@@ -866,31 +972,18 @@ function ClickerPage({
               </span>
             )}
           </div>
-          <button
-            className="primary wide"
-            onClick={() => void selectArea()}
-            disabled={running}
-          >
-            选择区域
-          </button>
           <div className="target-actions">
-            <button
-              className="secondary"
-              onClick={addCurrentTarget}
-              disabled={running}
-            >
-              添加为步骤
-            </button>
             {profile.targets.length > 0 && (
-              <button
-                className="secondary"
-                onClick={() =>
+              <Button
+                className="hero-button"
+                variant="bordered"
+                onPress={() =>
                   setProfile((current) => ({ ...current, targets: [] }))
                 }
-                disabled={running}
+                isDisabled={running}
               >
                 清空
-              </button>
+              </Button>
             )}
           </div>
           {profile.targets.length > 0 && (
@@ -918,96 +1011,116 @@ function ClickerPage({
               ))}
             </div>
           )}
-          <p className="hint">
-            {profile.targets.length > 0
-              ? `已添加 ${profile.targets.length} 个步骤，将按顺序循环。`
-              : "未添加步骤时，将点击当前坐标。"}
-          </p>
+          {profile.targets.length > 0 && (
+            <p className="hint">
+              已添加 {profile.targets.length} 个步骤，将按顺序循环。
+            </p>
+          )}
+          <div className="merged-controls">
+            <div>
+              <div className="progress">
+                已完成 <strong>{status.completed}</strong>
+                {status.targetCount ? ` / ${status.targetCount}` : " 次"}
+              </div>
+            </div>
+            <div className="actions">
+              <Button
+                className="hero-button primary-action-button"
+                color="primary"
+                isDisabled={running}
+                onPress={() => void start()}
+              >
+                开始点击
+              </Button>
+              <Button
+                className="hero-button danger-action-button"
+                color="danger"
+                isDisabled={!running}
+                onPress={stop}
+              >
+                停止
+              </Button>
+            </div>
+            {status.error && <p className="error">{status.error}</p>}
+            {message && <p className="hint">{message}</p>}
+          </div>
         </div>
         <div className="card click-params-card">
-          <p className="eyebrow">点击参数</p>
+          <p className="eyebrow">点击设置</p>
           <div className="grid parameter-grid">
-            <label>
-              点击间隔（毫秒，最小 100）
-              <input
-                type="number"
-                min={MIN_INTERVAL_MS}
-                value={profile.intervalMs}
-                onChange={(event) =>
-                  update("intervalMs", Number(event.target.value))
-                }
-              />
-            </label>
-            <label>
-              点击次数（0 表示无限）
-              <input
-                type="number"
-                min={0}
-                max={10000000}
-                value={profile.repeatCount}
-                onChange={(event) =>
-                  updateRepeatCount(Number(event.target.value))
-                }
-              />
-            </label>
-            <fieldset className="button-choice-field">
-              <legend>鼠标按键</legend>
-              <div className="button-options">
-                <label
-                  className={`button-option${profile.button === "left" ? " active" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="click-button"
-                    value="left"
-                    checked={profile.button === "left"}
-                    onChange={() => update("button", "left")}
-                  />
-                  <span>左键</span>
-                </label>
-                <label
-                  className={`button-option${profile.button === "right" ? " active" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="click-button"
-                    value="right"
-                    checked={profile.button === "right"}
-                    onChange={() => update("button", "right")}
-                  />
-                  <span>右键</span>
-                </label>
-              </div>
-            </fieldset>
-            <fieldset className="button-choice-field">
-              <legend>点击位置</legend>
-              <div className="button-options">
-                <label
-                  className={`button-option${profile.clickPosition === "center" ? " active" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="click-position"
-                    value="center"
-                    checked={profile.clickPosition === "center"}
-                    onChange={() => update("clickPosition", "center")}
-                  />
-                  <span>中心</span>
-                </label>
-                <label
-                  className={`button-option${profile.clickPosition === "random" ? " active" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="click-position"
-                    value="random"
-                    checked={profile.clickPosition === "random"}
-                    onChange={() => update("clickPosition", "random")}
-                  />
-                  <span>随机</span>
-                </label>
-              </div>
-            </fieldset>
+            <Input
+              className="hero-input"
+              label={
+                <FieldLabel description="两次点击之间的时间间隔，最小为 100 毫秒">
+                  点击间隔
+                </FieldLabel>
+              }
+              labelPlacement="outside"
+              min={MIN_INTERVAL_MS}
+              onValueChange={(value) => update("intervalMs", Number(value))}
+              size="sm"
+              type="number"
+              value={String(profile.intervalMs)}
+              variant="bordered"
+            />
+            <Input
+              className="hero-input"
+              label={
+                <FieldLabel description="执行次数，设置为 0 表示无限循环">
+                  点击次数
+                </FieldLabel>
+              }
+              labelPlacement="outside"
+              max={MAX_REPEAT_COUNT}
+              min={0}
+              onValueChange={(value) => updateRepeatCount(Number(value))}
+              size="sm"
+              type="number"
+              value={String(profile.repeatCount)}
+              variant="bordered"
+            />
+            <Select
+              className="hero-select"
+              label={
+                <FieldLabel description="选择模拟点击使用的鼠标按键">
+                  鼠标按键
+                </FieldLabel>
+              }
+              labelPlacement="outside"
+              onSelectionChange={(keys) => {
+                if (keys === "all") return;
+                const value = Array.from(keys)[0];
+                if (value === "left" || value === "right")
+                  update("button", value);
+              }}
+              selectedKeys={new Set([profile.button])}
+              size="sm"
+              variant="bordered"
+            >
+              <SelectItem key="left">左键</SelectItem>
+              <SelectItem key="right">右键</SelectItem>
+            </Select>
+            <Select
+              className="hero-select"
+              label={
+                <FieldLabel description="中心是指选中区域的中心位置；随机是指点击选中区域中随机位置。">
+                  点击位置
+                </FieldLabel>
+              }
+              labelPlacement="outside"
+              onSelectionChange={(keys) => {
+                if (keys === "all") return;
+                const value = Array.from(keys)[0];
+                if (value === "center" || value === "random")
+                  update("clickPosition", value);
+              }}
+              selectedKeys={new Set([profile.clickPosition])}
+              size="sm"
+              variant="bordered"
+            >
+              <SelectItem key="center">中心</SelectItem>
+              <SelectItem key="random">随机</SelectItem>
+            </Select>
           </div>
         </div>
         <div className="card profile-card">
@@ -1063,94 +1176,126 @@ function ClickerPage({
             方案仅保存在本机浏览器存储中，不会上传到服务器。
           </p>
         </div>
-        <div className="card controls">
-          <div>
-            <p className="eyebrow">运行控制</p>
-            <div className="progress">
-              已完成 <strong>{status.completed}</strong>
-              {status.targetCount ? ` / ${status.targetCount}` : " 次"}
-            </div>
-          </div>
-          <div className="actions">
-            <button
-              className="primary"
-              disabled={running}
-              onClick={() => void start()}
-            >
-              开始点击
-            </button>
-            <button className="danger" disabled={!running} onClick={stop}>
-              停止
-            </button>
-          </div>
-          {status.error && <p className="error">{status.error}</p>}
-          {message && <p className="hint">{message}</p>}
-        </div>
-        <div className="card logs-card">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">运行记录</p>
-              <h2>最近执行</h2>
-            </div>
-            <div className="log-summary">
-              {runLogs.length} 次运行 · {totalClicks} 次点击
-            </div>
-          </div>
-          {runLogs.length > 0 ? (
-            <div className="log-list">
-              {runLogs.slice(0, 8).map((log) => (
-                <div className="log-item" key={log.id}>
-                  <span className={`log-result log-${log.result}`}>
-                    {log.result === "completed"
-                      ? "完成"
-                      : log.result === "error"
-                        ? "错误"
-                        : "停止"}
-                  </span>
-                  <span className="log-time">
-                    {formatRunTime(log.startedAt)}
-                  </span>
-                  <strong>{log.clicks} 次</strong>
-                  {log.error && <small title={log.error}>{log.error}</small>}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="hint">完成一次点击任务后，这里会显示运行结果。</p>
-          )}
-          {runLogs.length > 0 && (
-            <button
-              className="clear-logs"
-              onClick={clearRunLogs}
-              disabled={running}
-            >
-              清空运行记录
-            </button>
-          )}
-        </div>
-        <div className="settings-row">
-          <span className="privacy">所有坐标和参数仅保存在本机</span>
-        </div>
-        <div className="shortcut-card">
-          <div>
-            <p className="eyebrow">快捷键与权限</p>
-            <p className="hint">
-              全局快捷键：⌘/Ctrl+Shift+Space 开始/停止，⌘/Ctrl+Shift+X
-              紧急停止。 macOS 需要授予辅助功能权限。
-            </p>
-          </div>
-          <button
-            className="secondary"
-            onClick={() =>
-              void invoke("open_accessibility_settings").catch((error) =>
-                setMessage(formatErrorMessage(error)),
-              )
-            }
-          >
-            打开辅助功能设置
-          </button>
-        </div>
       </section>
+      {startCountdown > 0 && (
+        <div
+          className="start-countdown-overlay"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="start-countdown-dialog">
+            <p>请松开鼠标</p>
+            <strong>{startCountdown}</strong>
+            <small>秒后开始自动点击</small>
+          </div>
+        </div>
+      )}
+      {infoPanel && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="info-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="info-panel-title"
+          >
+            <div className="info-dialog-heading">
+              <div>
+                <p className="eyebrow">
+                  {infoPanel === "help" ? "帮助" : "记录"}
+                </p>
+                <h2 id="info-panel-title">
+                  {infoPanel === "help" ? "快捷键与权限" : "运行记录"}
+                </h2>
+              </div>
+              <div className="info-dialog-heading-actions">
+                {infoPanel === "logs" && (
+                  <div className="log-summary">
+                    {runLogs.length} 次运行 · {totalClicks} 次点击
+                  </div>
+                )}
+                <Button
+                  aria-label="关闭弹出层"
+                  className="dialog-close-button"
+                  isIconOnly
+                  onPress={() => setInfoPanel(null)}
+                  size="sm"
+                  variant="light"
+                >
+                  ×
+                </Button>
+              </div>
+            </div>
+            {infoPanel === "help" ? (
+              <>
+                <p className="hint info-dialog-copy">
+                  全局快捷键：⌘/Ctrl+Shift+Space 开始/停止，⌘/Ctrl+Shift+X
+                  紧急停止。macOS 需要授予辅助功能权限。
+                </p>
+                <Button
+                  className="hero-button"
+                  variant="bordered"
+                  onPress={() =>
+                    void invoke("open_accessibility_settings").catch((error) =>
+                      setMessage(formatErrorMessage(error)),
+                    )
+                  }
+                >
+                  打开辅助功能设置
+                </Button>
+              </>
+            ) : (
+              <>
+                {runLogs.length > 0 ? (
+                  <div className="log-list">
+                    {runLogs.slice(0, 8).map((log) => (
+                      <div className="log-item" key={log.id}>
+                        <span className={`log-result log-${log.result}`}>
+                          {log.result === "completed"
+                            ? "完成"
+                            : log.result === "error"
+                              ? "错误"
+                              : "停止"}
+                        </span>
+                        <span className="log-time">
+                          {formatRunTime(log.startedAt)}
+                        </span>
+                        <strong>{log.clicks} 次</strong>
+                        {log.error && (
+                          <small title={log.error}>{log.error}</small>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="hint">
+                    完成一次点击任务后，这里会显示运行结果。
+                  </p>
+                )}
+                {runLogs.length > 0 && (
+                  <Button
+                    className="clear-logs-button"
+                    isDisabled={running}
+                    onPress={clearRunLogs}
+                    variant="light"
+                  >
+                    清空运行记录
+                  </Button>
+                )}
+              </>
+            )}
+            <div className="info-dialog-actions">
+              <Button
+                className="hero-button"
+                onPress={() => setInfoPanel(null)}
+                size="sm"
+                variant="light"
+              >
+                关闭
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
       {updateDialogOpen && (
         <div className="modal-backdrop" role="presentation">
           <section
@@ -1202,64 +1347,51 @@ function ClickerPage({
             <div className="confirm-actions">
               {updateState !== "downloading" &&
                 updateState !== "installing" && (
-                  <button
-                    className="cancel-button"
-                    onClick={() => void closeUpdateDialog()}
+                  <Button
+                    className="hero-button"
+                    onPress={() => void closeUpdateDialog()}
+                    size="sm"
                     type="button"
+                    variant="light"
                   >
                     关闭
-                  </button>
+                  </Button>
                 )}
               {updateState === "available" && (
-                <button
-                  className="confirm-button action-button"
-                  onClick={() => void installUpdate()}
+                <Button
+                  className="hero-button"
+                  color="primary"
+                  onPress={() => void installUpdate()}
+                  size="sm"
                   type="button"
                 >
                   更新并重启
-                </button>
+                </Button>
               )}
               {updateState === "error" && (
-                <button
-                  className="confirm-button action-button"
-                  onClick={() => void checkForUpdates(true)}
+                <Button
+                  className="hero-button"
+                  color="primary"
+                  onPress={() => void checkForUpdates(true)}
+                  size="sm"
                   type="button"
                 >
                   重试
-                </button>
+                </Button>
               )}
             </div>
           </section>
         </div>
       )}
-      <footer>
-        GoTap v{appPackage.version} · 当前用户 {session.user.email}
-      </footer>
     </main>
   );
 }
 
 function AuthenticatedApp() {
-  const [session, setSession] = useState<AuthSession | null>(() =>
-    getSession(),
-  );
-  useEffect(() => {
-    if (!session) return undefined;
-    const timer = window.setInterval(
-      () => {
-        void refreshSession(session)
-          .then(setSession)
-          .catch(() => undefined);
-      },
-      10 * 60 * 1000,
-    );
-    return () => window.clearInterval(timer);
-  }, [session]);
-  return session ? (
-    <ClickerPage session={session} onLogout={() => setSession(null)} />
-  ) : (
-    <AuthPage onAuthenticated={setSession} />
-  );
+  if (new URLSearchParams(window.location.search).has("legacy-auth")) {
+    return <AuthPage onAuthenticated={(_session) => undefined} />;
+  }
+  return <ClickerPage />;
 }
 
 export default function App() {
