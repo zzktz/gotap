@@ -837,7 +837,7 @@ function ClickerPage({
           <div className="section-heading">
             <div>
               <p className="eyebrow">目标位置</p>
-              <h2>选择要点击的按钮</h2>
+              <h2>选择点击区域</h2>
             </div>
             <span className={`state state-${status.state}`}>
               {running
@@ -850,34 +850,30 @@ function ClickerPage({
             </span>
           </div>
           <div className="coordinates">
-            <div>
-              <span>X</span>
-              <strong>{profile.x}</strong>
-            </div>
-            <div>
-              <span>Y</span>
-              <strong>{profile.y}</strong>
-            </div>
+            <span>坐标</span>
+            <strong>
+              ({profile.x}, {profile.y})
+            </strong>
+            {profile.width > 0 && profile.height > 0 && (
+              <span className="coordinate-size">
+                区域 {profile.width} × {profile.height}
+              </span>
+            )}
           </div>
           <button
             className="primary wide"
             onClick={() => void selectArea()}
             disabled={running}
           >
-            选择目标区域
+            选择区域
           </button>
-          {profile.width > 0 && profile.height > 0 && (
-            <p className="selection-summary">
-              已选择区域：{profile.width} × {profile.height}（点击中心）
-            </p>
-          )}
           <div className="target-actions">
             <button
               className="secondary"
               onClick={addCurrentTarget}
               disabled={running}
             >
-              添加当前区域为步骤
+              添加为步骤
             </button>
             {profile.targets.length > 0 && (
               <button
@@ -887,7 +883,7 @@ function ClickerPage({
                 }
                 disabled={running}
               >
-                清空步骤
+                清空
               </button>
             )}
           </div>
@@ -917,7 +913,9 @@ function ClickerPage({
             </div>
           )}
           <p className="hint">
-            添加步骤后将按列表顺序循环点击；未添加步骤时使用当前坐标。跨显示器坐标以当前主屏为基准。
+            {profile.targets.length > 0
+              ? `已添加 ${profile.targets.length} 个步骤，将按顺序循环。`
+              : "未添加步骤时，将点击当前坐标。"}
           </p>
         </div>
         <div className="card">
