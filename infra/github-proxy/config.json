@@ -1,0 +1,30 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "http",
+      "tag": "github-http-local",
+      "listen": "127.0.0.1",
+      "listen_port": 18081
+    },
+    {
+      "type": "http",
+      "tag": "github-http-gotap",
+      "listen": "172.21.0.1",
+      "listen_port": 18082
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "socks",
+      "tag": "egress-tunnel",
+      "server": "127.0.0.1",
+      "server_port": 19080
+    }
+  ],
+  "route": {
+    "final": "egress-tunnel"
+  }
+}

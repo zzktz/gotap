@@ -66,6 +66,10 @@ QUOTA_TIMEZONE = os.getenv("QUOTA_TIMEZONE", "Asia/Shanghai")
 MONTHLY_TRAFFIC_QUOTA_BYTES = 1_000_000_000_000
 METERING_TOKEN = os.getenv("METERING_TOKEN", "").strip()
 UPDATE_GITHUB_REPOSITORY = os.getenv("UPDATE_GITHUB_REPOSITORY", "zzktz/gotap").strip()
+# Optional HTTP CONNECT proxy used for GitHub API and release asset traffic.
+# Production points this at the shared goyou-github-proxy bridge listener;
+# local development remains direct when the variable is unset.
+GITHUB_PROXY_URL = os.getenv("GITHUB_PROXY_URL", "").strip()
 UPDATE_STORAGE_DIR = Path(os.getenv("UPDATE_STORAGE_DIR", str(DB_PATH.parent / "updates")))
 UPDATE_MAX_ASSET_BYTES = int(os.getenv("UPDATE_MAX_ASSET_BYTES", "2000000000"))
 FEEDBACK_STORAGE_DIR = Path(os.getenv("FEEDBACK_STORAGE_DIR", str(DB_PATH.parent / "feedback")))
@@ -93,12 +97,12 @@ logger = logging.getLogger(__name__)
 _maintenance_stop = threading.Event()
 _maintenance_thread: threading.Thread | None = None
 
-# The production container inherits HTTP(S)_PROXY from the host.  That proxy
-# is bound to the host loopback address and is not reachable from inside the
-# container, so urllib would fail before it can contact GitHub.  Release
-# imports use GitHub's HTTPS API directly; bypass inherited proxy variables
-# for these requests while leaving the rest of the process environment intact.
-_github_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+# Use the dedicated GitHub proxy when configured.  A custom opener keeps
+# these requests isolated from unrelated process-wide proxy settings.
+_github_proxy_handler = urllib.request.ProxyHandler(
+    {"http": GITHUB_PROXY_URL, "https": GITHUB_PROXY_URL} if GITHUB_PROXY_URL else {}
+)
+_github_opener = urllib.request.build_opener(_github_proxy_handler)
 
 
 def _github_urlopen(request: urllib.request.Request, *, timeout: int):
