@@ -100,6 +100,7 @@ function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
       ? Math.max(MIN_INTERVAL_MS, profile.intervalMs)
       : DEFAULT_PROFILE.intervalMs,
     pressDurationMs: FIXED_PRESS_DURATION_MS,
+    button: profile.button === "right" ? "right" : "left",
     targets: profile.targets ?? [],
   };
 }
@@ -932,31 +933,6 @@ function ClickerPage({
                 }
               />
             </label>
-            <label>
-              鼠标按键
-              <select
-                value={profile.button}
-                onChange={(event) =>
-                  update("button", event.target.value as ClickButton)
-                }
-              >
-                <option value="left">左键</option>
-                <option value="right">右键</option>
-                <option value="middle">中键</option>
-              </select>
-            </label>
-            <label>
-              执行次数
-              <select
-                value={profile.repeatMode}
-                onChange={(event) =>
-                  update("repeatMode", event.target.value as RepeatMode)
-                }
-              >
-                <option value="count">指定次数</option>
-                <option value="infinite">无限循环</option>
-              </select>
-            </label>
             {profile.repeatMode === "count" && (
               <label>
                 点击次数
@@ -971,6 +947,30 @@ function ClickerPage({
                 />
               </label>
             )}
+            <label>
+              鼠标按键
+              <select
+                value={profile.button}
+                onChange={(event) =>
+                  update("button", event.target.value as ClickButton)
+                }
+              >
+                <option value="left">左键</option>
+                <option value="right">右键</option>
+              </select>
+            </label>
+            <label>
+              执行次数
+              <select
+                value={profile.repeatMode}
+                onChange={(event) =>
+                  update("repeatMode", event.target.value as RepeatMode)
+                }
+              >
+                <option value="count">指定次数</option>
+                <option value="infinite">无限循环</option>
+              </select>
+            </label>
           </div>
           <p className="hint">
             点击间隔指两次按下开始之间的时间，按下时长固定为 5 毫秒。
