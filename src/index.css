@@ -203,6 +203,52 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
+.button-choice-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.button-choice-field legend {
+  padding: 0;
+  color: #536679;
+  font-size: 12px;
+  font-weight: 650;
+}
+.button-options {
+  display: flex;
+  gap: 6px;
+  height: 36px;
+  margin-top: 6px;
+}
+.button-option {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid #d4dfe7;
+  border-radius: 9px;
+  color: #536679;
+  background: #fbfcfd;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+.button-option.active {
+  border-color: #4f93bc;
+  color: #1768a7;
+  background: #eef8fd;
+}
+.button-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: #1768a7;
+}
 label {
   display: grid;
   gap: 6px;

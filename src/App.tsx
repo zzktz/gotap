@@ -946,18 +946,35 @@ function ClickerPage({
                 }
               />
             </label>
-            <label>
-              鼠标按键
-              <select
-                value={profile.button}
-                onChange={(event) =>
-                  update("button", event.target.value as ClickButton)
-                }
-              >
-                <option value="left">左键</option>
-                <option value="right">右键</option>
-              </select>
-            </label>
+            <fieldset className="button-choice-field">
+              <legend>鼠标按键</legend>
+              <div className="button-options">
+                <label
+                  className={`button-option${profile.button === "left" ? " active" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="click-button"
+                    value="left"
+                    checked={profile.button === "left"}
+                    onChange={() => update("button", "left")}
+                  />
+                  <span>左键</span>
+                </label>
+                <label
+                  className={`button-option${profile.button === "right" ? " active" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="click-button"
+                    value="right"
+                    checked={profile.button === "right"}
+                    onChange={() => update("button", "right")}
+                  />
+                  <span>右键</span>
+                </label>
+              </div>
+            </fieldset>
           </div>
         </div>
         <div className="card profile-card">
