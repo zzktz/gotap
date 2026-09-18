@@ -17,7 +17,6 @@ import {
   SelectItem,
 } from "@heroui/react";
 import appPackage from "../package.json";
-import logoUrl from "./logo.svg";
 import {
   clearRememberedLogin,
   formatErrorMessage,
@@ -133,7 +132,24 @@ function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
 }
 
 function CursorLogo() {
-  return <img className="cursor-logo" src={logoUrl} alt="GoTap 鼠标箭头标志" />;
+  return (
+    <svg
+      aria-label="GoTap 鼠标箭头标志"
+      className="cursor-logo"
+      role="img"
+      viewBox="0 0 1024 1024"
+    >
+      <rect width="1024" height="1024" fill="#1768a7" />
+      <path
+        d="M842 562 422 422l140 420 117-117 94 94 46-47-93-93 116-117Z"
+        fill="#fff"
+      />
+      <path
+        d="M248 743V248h495v213l66 22V182H182v627h301l-22-66H248Z"
+        fill="#fff"
+      />
+    </svg>
+  );
 }
 
 function FieldLabel({
@@ -403,145 +419,148 @@ function AuthPage({
   };
   return (
     <main className="auth-shell">
-      <section className="card auth-card">
-        <div className="brand">
-          <div className="brand-mark">
+      <section className="auth-panel">
+        <div className="auth-brand">
+          <div className="brand-mark auth-brand-mark">
             <CursorLogo />
           </div>
           <div>
-            <strong>GoTap</strong>
-            <small>轻量、可靠的桌面自动点击器</small>
+            <h1>GoTap</h1>
+            <p>轻量、可靠的桌面自动点击器</p>
           </div>
         </div>
-        <p className="eyebrow">
-          {mode === "login"
-            ? "欢迎回来"
-            : mode === "register"
-              ? "创建账号"
-              : "找回密码"}
-        </p>
-        <h1>
-          {mode === "login"
-            ? "用户登录"
-            : mode === "register"
-              ? "注册账号"
-              : "重置密码"}
-        </h1>
-        <form onSubmit={(event) => void submit(event)} className="form">
-          {mode === "register" && (
+        <section className="card auth-card">
+          <p className="eyebrow">
+            {mode === "login"
+              ? "欢迎回来"
+              : mode === "register"
+                ? "创建账号"
+                : "找回密码"}
+          </p>
+          <h2>
+            {mode === "login"
+              ? "用户登录"
+              : mode === "register"
+                ? "注册账号"
+                : "重置密码"}
+          </h2>
+          <form onSubmit={(event) => void submit(event)} className="form">
+            {mode === "register" && (
+              <Input
+                className="hero-input"
+                label="姓名"
+                labelPlacement="outside"
+                maxLength={10}
+                onValueChange={setName}
+                placeholder="可选"
+                size="sm"
+                value={name}
+                variant="bordered"
+              />
+            )}
             <Input
               className="hero-input"
-              label="姓名"
+              isReadOnly={mode === "forgot"}
+              isRequired
+              label="邮箱"
               labelPlacement="outside"
-              maxLength={10}
-              onValueChange={setName}
-              placeholder="可选"
+              onValueChange={setEmail}
+              placeholder="you@example.com"
               size="sm"
-              value={name}
+              type="email"
+              value={email}
               variant="bordered"
             />
-          )}
-          <Input
-            className="hero-input"
-            isReadOnly={mode === "forgot"}
-            isRequired
-            label="邮箱"
-            labelPlacement="outside"
-            onValueChange={setEmail}
-            placeholder="you@example.com"
-            size="sm"
-            type="email"
-            value={email}
-            variant="bordered"
-          />
-          {(mode === "register" || mode === "forgot") && (
-            <div className="form-field">
-              <div className="code-row">
-                <Input
-                  className="hero-input"
-                  classNames={{ inputWrapper: "code-input-wrapper" }}
-                  isRequired
-                  inputMode="numeric"
-                  label="验证码"
-                  labelPlacement="outside"
-                  maxLength={6}
-                  onValueChange={(value) => setCode(value.replace(/\D/g, ""))}
-                  placeholder="6 位验证码"
-                  size="sm"
-                  value={code}
-                  variant="bordered"
-                />
-                <Button
-                  className="hero-button code-button"
-                  isDisabled={busy || countdown > 0}
-                  onPress={() => void sendCode()}
-                  type="button"
-                  variant="bordered"
-                >
-                  {countdown ? `${countdown}s 后重发` : "发送验证码"}
-                </Button>
+            {(mode === "register" || mode === "forgot") && (
+              <div className="form-field">
+                <div className="code-row">
+                  <Input
+                    className="hero-input"
+                    classNames={{ inputWrapper: "code-input-wrapper" }}
+                    isRequired
+                    inputMode="numeric"
+                    label="验证码"
+                    labelPlacement="outside"
+                    maxLength={6}
+                    onValueChange={(value) => setCode(value.replace(/\D/g, ""))}
+                    placeholder="6 位验证码"
+                    size="sm"
+                    value={code}
+                    variant="bordered"
+                  />
+                  <Button
+                    className="hero-button code-button"
+                    isDisabled={busy || countdown > 0}
+                    onPress={() => void sendCode()}
+                    type="button"
+                    variant="bordered"
+                  >
+                    {countdown ? `${countdown}s 后重发` : "发送验证码"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-          <Input
-            className="hero-input"
-            isRequired
-            label="密码"
-            labelPlacement="outside"
-            minLength={8}
-            onValueChange={setPassword}
-            placeholder="至少 8 位"
-            size="sm"
-            type="password"
-            value={password}
-            variant="bordered"
-          />
-          {mode === "login" && (
-            <Checkbox
-              className="remember-checkbox"
-              isSelected={remember}
-              onValueChange={setRemember}
+            )}
+            <Input
+              className="hero-input"
+              isRequired
+              label="密码"
+              labelPlacement="outside"
+              minLength={8}
+              onValueChange={setPassword}
+              placeholder="至少 8 位"
               size="sm"
+              type="password"
+              value={password}
+              variant="bordered"
+            />
+            {mode === "login" && (
+              <Checkbox
+                className="remember-checkbox"
+                isSelected={remember}
+                onValueChange={setRemember}
+                size="sm"
+              >
+                记住登录信息
+              </Checkbox>
+            )}
+            {error && <p className="error">{error}</p>}
+            {message && <p className="success">{message}</p>}
+            <Button
+              className="hero-button auth-submit"
+              color="primary"
+              isDisabled={busy}
+              type="submit"
             >
-              记住登录信息
-            </Checkbox>
-          )}
-          {error && <p className="error">{error}</p>}
-          {message && <p className="success">{message}</p>}
-          <Button
-            className="hero-button auth-submit"
-            color="primary"
-            isDisabled={busy}
-            type="submit"
-          >
-            {busy
-              ? "处理中…"
-              : mode === "login"
-                ? "登录"
-                : mode === "register"
-                  ? "注册并登录"
-                  : "重置密码"}
-          </Button>
-        </form>
-        <div className="auth-links">
-          {mode === "login" && (
-            <>
-              <button onClick={() => setMode("forgot")}>忘记密码</button>
-              {registrationEnabled && (
-                <button onClick={() => setMode("register")}>注册账号</button>
-              )}
-            </>
-          )}
-          {mode !== "login" && (
-            <button onClick={() => setMode("login")}>返回登录</button>
-          )}
-        </div>
+              {busy
+                ? "处理中…"
+                : mode === "login"
+                  ? "登录"
+                  : mode === "register"
+                    ? "注册并登录"
+                    : "重置密码"}
+            </Button>
+          </form>
+          <div className="auth-links">
+            {mode === "login" && (
+              <>
+                <button onClick={() => setMode("forgot")}>忘记密码</button>
+                {registrationEnabled && (
+                  <button onClick={() => setMode("register")}>注册账号</button>
+                )}
+              </>
+            )}
+            {mode !== "login" && (
+              <button onClick={() => setMode("login")}>返回登录</button>
+            )}
+          </div>
+        </section>
+        <p className="auth-copyright">GoTap · 桌面自动点击器</p>
       </section>
     </main>
   );
 }
 
-function ClickerPage() {
+function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
   const [profile, setProfile] = useState<ClickProfile>(DEFAULT_PROFILE);
   const [status, setStatus] = useState<ClickerStatus>({
     state: "idle",
@@ -836,6 +855,10 @@ function ClickerPage() {
   };
   const openFeedbackDialog = () => {
     setAboutMenuOpen(false);
+    if (!getSession()) {
+      onRequireLogin();
+      return;
+    }
     setFeedbackDialogOpen(true);
     setFeedbackMessage("");
     setFeedbackFiles([]);
@@ -1650,6 +1673,7 @@ function AuthenticatedApp() {
   const [session, setSession] = useState<AuthSession | null>(() =>
     getSession(),
   );
+  const [loginRequired, setLoginRequired] = useState(false);
   useEffect(() => {
     if (!session) return undefined;
     const timer = window.setInterval(
@@ -1662,7 +1686,17 @@ function AuthenticatedApp() {
     );
     return () => window.clearInterval(timer);
   }, [session]);
-  return session ? <ClickerPage /> : <AuthPage onAuthenticated={setSession} />;
+  if (loginRequired) {
+    return (
+      <AuthPage
+        onAuthenticated={(nextSession) => {
+          setSession(nextSession);
+          setLoginRequired(false);
+        }}
+      />
+    );
+  }
+  return <ClickerPage onRequireLogin={() => setLoginRequired(true)} />;
 }
 
 export default function App() {
