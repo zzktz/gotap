@@ -15,6 +15,7 @@ import {
   Input,
   Select,
   SelectItem,
+  Tooltip,
 } from "@heroui/react";
 import appPackage from "../package.json";
 import {
@@ -160,17 +161,18 @@ function FieldLabel({
   description: string;
 }) {
   return (
-    <span className="field-label" title={description}>
+    <span className="field-label">
       {children}
-      <span
-        className="field-help"
-        aria-label={`${children}说明`}
-        data-tooltip={description}
-        tabIndex={0}
-        title={description}
-      >
-        ?
-      </span>
+      <Tooltip content={description} placement="top">
+        <span
+          aria-label={`${children}说明`}
+          className="field-help"
+          role="img"
+          tabIndex={0}
+        >
+          ?
+        </span>
+      </Tooltip>
     </span>
   );
 }
@@ -1043,6 +1045,14 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
           </div>
         </div>
         <div className="topbar-actions">
+          <Button
+            className="topbar-action"
+            onPress={() => setInfoPanel("logs")}
+            size="sm"
+            variant="light"
+          >
+            记录
+          </Button>
           <div className="about-menu-wrap" ref={aboutMenuRef}>
             <Button
               aria-expanded={aboutMenuOpen}
@@ -1076,14 +1086,6 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
               </div>
             )}
           </div>
-          <Button
-            className="topbar-action"
-            onPress={() => setInfoPanel("logs")}
-            size="sm"
-            variant="light"
-          >
-            记录
-          </Button>
         </div>
       </header>
       <section className="content">
@@ -1254,6 +1256,7 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
                 if (value === "left" || value === "right")
                   update("button", value);
               }}
+              placeholder="请选择鼠标按键"
               selectedKeys={new Set([profile.button])}
               size="sm"
               variant="bordered"
@@ -1275,6 +1278,7 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
                 if (value === "center" || value === "random")
                   update("clickPosition", value);
               }}
+              placeholder="请选择点击位置"
               selectedKeys={new Set([profile.clickPosition])}
               size="sm"
               variant="bordered"

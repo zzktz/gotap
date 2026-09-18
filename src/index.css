@@ -289,40 +289,6 @@ h2 {
   line-height: 1;
   cursor: help;
 }
-.field-help::after {
-  position: absolute;
-  z-index: 30;
-  bottom: calc(100% + 7px);
-  left: 50%;
-  width: max-content;
-  max-width: 240px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  color: #fff;
-  background: #152942;
-  content: attr(data-tooltip);
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.4;
-  opacity: 0;
-  pointer-events: none;
-  text-align: left;
-  transform: translate(-50%, 3px);
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
-  white-space: normal;
-}
-.field-help::before {
-  position: absolute;
-  inset: -4px;
-  content: "";
-}
-.field-help:hover::after,
-.field-help:focus-visible::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
 .field-help:hover {
   color: #2874a7;
 }
