@@ -8,7 +8,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -32,6 +32,8 @@ pub struct ClickProfile {
     pub repeat_count: u64,
     pub button: ClickButton,
     #[serde(default)]
+    pub click_position: ClickPosition,
+    #[serde(default)]
     pub targets: Vec<ClickTarget>,
 }
 
@@ -51,6 +53,14 @@ pub struct ClickTarget {
 pub enum RepeatMode {
     Count,
     Infinite,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClickPosition {
+    #[default]
+    Center,
+    Random,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -141,6 +151,52 @@ fn input_button(button: &ClickButton) -> Button {
     }
 }
 
+fn random_seed() -> u64 {
+    let seed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    if seed == 0 {
+        0x9e37_79b9_7f4a_7c15
+    } else {
+        seed
+    }
+}
+
+fn next_random(state: &mut u64) -> u64 {
+    if *state == 0 {
+        *state = 0x9e37_79b9_7f4a_7c15;
+    }
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    *state
+}
+
+fn random_coordinate(center: i32, size: u32, state: &mut u64) -> i32 {
+    if size == 0 {
+        return center;
+    }
+    let start = center as i64 - (size as i64 / 2);
+    let value = start + (next_random(state) % size as u64) as i64;
+    value.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
+
+fn resolve_click_point(
+    target: (i32, i32, u32, u32),
+    position: &ClickPosition,
+    state: &mut u64,
+) -> (i32, i32) {
+    let (x, y, width, height) = target;
+    match position {
+        ClickPosition::Center => (x, y),
+        ClickPosition::Random => (
+            random_coordinate(x, width, state),
+            random_coordinate(y, height, state),
+        ),
+    }
+}
+
 pub fn stop_clicking(runtime: &ClickerRuntime) {
     if let Ok(cancel) = runtime.cancel.lock() {
         if let Some(flag) = cancel.as_ref() {
@@ -207,22 +263,24 @@ pub fn start_clicking(
         };
         let button = input_button(&profile.button);
         let targets = if profile.targets.is_empty() {
-            vec![(profile.x, profile.y)]
+            vec![(profile.x, profile.y, profile.width, profile.height)]
         } else {
             profile
                 .targets
                 .iter()
-                .map(|target| (target.x, target.y))
+                .map(|target| (target.x, target.y, target.width, target.height))
                 .collect()
         };
         let mut completed = 0u64;
+        let mut random_state = random_seed();
         let infinite =
             matches!(profile.repeat_mode, RepeatMode::Infinite) || profile.repeat_count == 0;
         loop {
             if cancel.load(Ordering::Relaxed) {
                 break;
             }
-            let (x, y) = targets[(completed as usize) % targets.len()];
+            let target = targets[(completed as usize) % targets.len()];
+            let (x, y) = resolve_click_point(target, &profile.click_position, &mut random_state);
             if let Err(error) = enigo
                 .move_mouse(x, y, Coordinate::Abs)
                 .and_then(|_| enigo.button(button, Direction::Press))
@@ -370,6 +428,7 @@ mod tests {
             repeat_mode: RepeatMode::Count,
             repeat_count: 3,
             button: ClickButton::Left,
+            click_position: ClickPosition::Center,
             targets: Vec::new(),
         }
     }
@@ -413,6 +472,26 @@ mod tests {
         let mut value = profile();
         value.repeat_count = 0;
         assert!(validate(&value).is_ok());
+    }
+
+    #[test]
+    fn random_click_point_stays_inside_target() {
+        let mut state = 123_u64;
+        for _ in 0..100 {
+            let (x, y) =
+                resolve_click_point((100, 200, 20, 10), &ClickPosition::Random, &mut state);
+            assert!((90..110).contains(&x));
+            assert!((195..205).contains(&y));
+        }
+    }
+
+    #[test]
+    fn random_click_point_without_area_uses_center() {
+        let mut state = 123_u64;
+        assert_eq!(
+            resolve_click_point((100, 200, 0, 0), &ClickPosition::Random, &mut state),
+            (100, 200)
+        );
     }
 }
 

@@ -30,6 +30,7 @@ import type { AuthSession } from "./auth";
 type Mode = "login" | "register" | "forgot";
 type RepeatMode = "count" | "infinite";
 type ClickButton = "left" | "right" | "middle";
+type ClickPosition = "center" | "random";
 interface ClickProfile {
   x: number;
   y: number;
@@ -40,6 +41,7 @@ interface ClickProfile {
   repeatMode: RepeatMode;
   repeatCount: number;
   button: ClickButton;
+  clickPosition: ClickPosition;
   targets: ClickTarget[];
 }
 interface ClickTarget {
@@ -89,6 +91,7 @@ const DEFAULT_PROFILE: ClickProfile = {
   repeatMode: "count",
   repeatCount: 10,
   button: "left",
+  clickPosition: "center",
   targets: [],
 };
 
@@ -105,6 +108,7 @@ function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
       : DEFAULT_PROFILE.intervalMs,
     pressDurationMs: FIXED_PRESS_DURATION_MS,
     button: profile.button === "right" ? "right" : "left",
+    clickPosition: profile.clickPosition === "random" ? "random" : "center",
     repeatMode,
     repeatCount: repeatMode === "infinite" ? 0 : profile.repeatCount,
     targets: profile.targets ?? [],
@@ -972,6 +976,35 @@ function ClickerPage({
                     onChange={() => update("button", "right")}
                   />
                   <span>右键</span>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset className="button-choice-field">
+              <legend>点击位置</legend>
+              <div className="button-options">
+                <label
+                  className={`button-option${profile.clickPosition === "center" ? " active" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="click-position"
+                    value="center"
+                    checked={profile.clickPosition === "center"}
+                    onChange={() => update("clickPosition", "center")}
+                  />
+                  <span>中心</span>
+                </label>
+                <label
+                  className={`button-option${profile.clickPosition === "random" ? " active" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="click-position"
+                    value="random"
+                    checked={profile.clickPosition === "random"}
+                    onChange={() => update("clickPosition", "random")}
+                  />
+                  <span>随机</span>
                 </label>
               </div>
             </fieldset>
