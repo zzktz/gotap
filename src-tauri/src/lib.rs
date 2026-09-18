@@ -1,4 +1,3 @@
-mod auto_launch;
 mod commands;
 
 use commands::{ClickerRuntime, CLICKER_STATUS_EVENT};
@@ -43,8 +42,6 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            // Remove the login-item entry created by older GoTap versions.
-            let _ = auto_launch::set(false);
             let show_window =
                 MenuItem::with_id(app, SHOW_WINDOW_MENU_ID, "显示 GoTap", true, None::<&str>)?;
             let toggle_clicker = MenuItem::with_id(

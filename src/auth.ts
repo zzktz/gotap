@@ -24,6 +24,30 @@ export interface AuthSettings {
   registration_enabled: boolean;
 }
 
+export interface FeedbackAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface FeedbackItem {
+  id: string;
+  message: string;
+  status: "open" | "replied" | string;
+  reply: string | null;
+  created_at: string;
+  updated_at: string;
+  replied_at: string | null;
+  attachments: FeedbackAttachment[];
+}
+
+export interface FeedbackScreenshot {
+  filename: string;
+  data: string;
+}
+
 const SESSION_KEY = "gotap.auth.session";
 const REMEMBERED_LOGIN_KEY = "gotap.login.remembered";
 
@@ -100,6 +124,33 @@ export function saveRememberedLogin(email: string, password: string): void {
 
 export function clearRememberedLogin(): void {
   localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+}
+
+function authenticatedHeaders(): HeadersInit {
+  const session = getSession();
+  return session ? { Authorization: `Bearer ${session.token}` } : {};
+}
+
+export async function getFeedback(): Promise<FeedbackItem[]> {
+  const response = await request<{ items: FeedbackItem[] }>("/v1/feedback", {
+    method: "GET",
+    headers: authenticatedHeaders(),
+  });
+  return response.items;
+}
+
+export function submitFeedback(
+  message: string,
+  screenshots: FeedbackScreenshot[],
+): Promise<FeedbackItem> {
+  return request<FeedbackItem>("/v1/feedback", {
+    method: "POST",
+    headers: {
+      ...authenticatedHeaders(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ message, screenshots }),
+  });
 }
 
 export function getAuthSettings(): Promise<AuthSettings> {

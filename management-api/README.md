@@ -79,7 +79,7 @@ SQLite 数据库默认使用 WAL 模式和 5 秒 busy timeout。`usage_reports` 
 
 忘记密码时先调用 `/v1/auth/password-reset/send-code`，再提交 `/v1/auth/password-reset` 设置新密码。密码重置成功后，该用户已有的刷新令牌会全部失效。
 
-桌面端生产 API 地址为 `https://gotop.123371.com`。构建客户端时可通过 `VITE_API_BASE_URL` 覆盖默认地址。
+桌面端生产 API 首选地址为 `https://gotap.123371.com`，过渡期间仍兼容 `https://gotop.123371.com`；客户端请求层会在新域名连接失败时回退到旧域名。
 
 新租约会按活跃租约数与权重分配到一个已启用且未排空的 relay，并分配该 relay 端口范围内的独立 Shadowsocks 凭据和端口（默认 `30000-39999`）。计量适配器通过内部同步接口只读取自己 `RELAY_ID` 对应的租约并生成 relay 配置。旧租约会在下一次刷新时迁移到独立凭据；当原 relay 被停用或排空时，刷新会自动迁移到其他可用 relay。
 

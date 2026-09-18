@@ -616,7 +616,7 @@ pub async fn control_request(
     body: Option<serde_json::Value>,
     access_token: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    const API_BASE_URL: &str = "https://gotop.123371.com";
+    const API_BASE_URLS: [&str; 2] = ["https://gotap.123371.com", "https://gotop.123371.com"];
     let client = reqwest::Client::builder()
         .no_proxy()
         .user_agent("GoTap/0.1")
@@ -625,35 +625,54 @@ pub async fn control_request(
         .map_err(|error| format!("无法创建服务器请求：{error}"))?;
     let method = reqwest::Method::from_bytes(method.to_uppercase().as_bytes())
         .map_err(|error| format!("无效的请求方法：{error}"))?;
-    let mut request = client.request(method, format!("{API_BASE_URL}{path}"));
-    if let Some(token) = access_token.filter(|token| !token.trim().is_empty()) {
-        request = request.bearer_auth(token);
+    let body = body
+        .map(|body| serde_json::to_vec(&body))
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    let mut last_error = None;
+    for base_url in API_BASE_URLS {
+        let mut request = client.request(method.clone(), format!("{base_url}{path}"));
+        if let Some(token) = access_token
+            .as_deref()
+            .filter(|token| !token.trim().is_empty())
+        {
+            request = request.bearer_auth(token);
+        }
+        if let Some(body) = body.as_ref() {
+            request = request
+                .header("content-type", "application/json")
+                .body(body.clone());
+        }
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(error) => {
+                last_error = Some(error);
+                continue;
+            }
+        };
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .map_err(|error| format!("读取服务器响应失败：{error}"))?;
+        let value = if text.trim().is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(&text).map_err(|error| format!("服务器返回数据无效：{error}"))?
+        };
+        if !status.is_success() {
+            let detail = value
+                .get("detail")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_else(|| status.canonical_reason().unwrap_or("请求失败"));
+            return Err(detail.to_owned());
+        }
+        return Ok(value);
     }
-    if let Some(body) = body {
-        request = request
-            .header("content-type", "application/json")
-            .body(serde_json::to_vec(&body).map_err(|error| error.to_string())?);
-    }
-    let response = request
-        .send()
-        .await
-        .map_err(|error| format!("无法连接服务器，请检查网络或稍后重试：{error}"))?;
-    let status = response.status();
-    let text = response
-        .text()
-        .await
-        .map_err(|error| format!("读取服务器响应失败：{error}"))?;
-    let value = if text.trim().is_empty() {
-        serde_json::Value::Null
-    } else {
-        serde_json::from_str(&text).map_err(|error| format!("服务器返回数据无效：{error}"))?
-    };
-    if !status.is_success() {
-        let detail = value
-            .get("detail")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_else(|| status.canonical_reason().unwrap_or("请求失败"));
-        return Err(detail.to_owned());
-    }
-    Ok(value)
+    Err(format!(
+        "无法连接服务器，请检查网络或稍后重试：{}",
+        last_error
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "未知网络错误".into())
+    ))
 }

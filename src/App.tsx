@@ -21,19 +21,24 @@ import logoUrl from "./logo.svg";
 import {
   clearRememberedLogin,
   formatErrorMessage,
+  getFeedback,
   getAuthSettings,
   getRememberedLogin,
+  getSession,
   login,
   register,
   requestPasswordResetCode,
   requestRegistrationCode,
+  refreshSession,
   resetPassword,
   saveRememberedLogin,
+  submitFeedback,
 } from "./auth";
-import type { AuthSession } from "./auth";
+import type { AuthSession, FeedbackItem } from "./auth";
 
 type Mode = "login" | "register" | "forgot";
 type InfoPanel = "help" | "logs" | null;
+type FeedbackFile = { file: File; previewName: string };
 type RepeatMode = "count" | "infinite";
 type ClickButton = "left" | "right" | "middle";
 type ClickPosition = "center" | "random";
@@ -547,6 +552,14 @@ function ClickerPage() {
   const [message, setMessage] = useState("");
   const [startCountdown, setStartCountdown] = useState(0);
   const [infoPanel, setInfoPanel] = useState<InfoPanel>(null);
+  const [aboutMenuOpen, setAboutMenuOpen] = useState(false);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackFiles, setFeedbackFiles] = useState<FeedbackFile[]>([]);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+  const aboutMenuRef = useRef<HTMLDivElement>(null);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [hasAvailableUpdate, setHasAvailableUpdate] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -810,6 +823,90 @@ function ClickerPage() {
     persistRunLogs([]);
     setMessage("运行日志已清空");
   };
+  const loadFeedback = async () => {
+    setFeedbackBusy(true);
+    setFeedbackError("");
+    try {
+      setFeedbackItems(await getFeedback());
+    } catch (error) {
+      setFeedbackError(formatErrorMessage(error));
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
+  const openFeedbackDialog = () => {
+    setAboutMenuOpen(false);
+    setFeedbackDialogOpen(true);
+    setFeedbackMessage("");
+    setFeedbackFiles([]);
+    void loadFeedback();
+  };
+  const closeFeedbackDialog = () => {
+    if (feedbackBusy) return;
+    setFeedbackDialogOpen(false);
+    setFeedbackError("");
+  };
+  const selectFeedbackFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    const next: FeedbackFile[] = [];
+    for (const file of selected) {
+      if (next.length >= 3) break;
+      if (
+        !(
+          file.type === "image/png" ||
+          file.type === "image/jpeg" ||
+          file.type === "image/webp"
+        )
+      ) {
+        setFeedbackError("截图仅支持 PNG、JPEG 或 WebP 格式");
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setFeedbackError("单张截图不能超过 5 MiB");
+        continue;
+      }
+      next.push({ file, previewName: file.name });
+    }
+    setFeedbackFiles(next);
+    event.target.value = "";
+  };
+  const encodeFeedbackFile = async (file: File): Promise<string> => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      binary += String.fromCharCode(
+        ...bytes.subarray(index, index + chunkSize),
+      );
+    }
+    return btoa(binary);
+  };
+  const sendFeedback = async () => {
+    const message = feedbackMessage.trim();
+    if (!message) {
+      setFeedbackError("请填写反馈内容");
+      return;
+    }
+    setFeedbackBusy(true);
+    setFeedbackError("");
+    try {
+      const screenshots = await Promise.all(
+        feedbackFiles.map(async ({ file, previewName }) => ({
+          filename: previewName,
+          data: await encodeFeedbackFile(file),
+        })),
+      );
+      const item = await submitFeedback(message, screenshots);
+      setFeedbackItems((current) => [item, ...current].slice(0, 50));
+      setFeedbackMessage("");
+      setFeedbackFiles([]);
+      setMessage("反馈已提交");
+    } catch (error) {
+      setFeedbackError(formatErrorMessage(error));
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
   const formatRunTime = (value: string) =>
     new Date(value).toLocaleString([], {
       month: "2-digit",
@@ -869,6 +966,22 @@ function ClickerPage() {
     };
   }, [running, profile]);
   useEffect(() => {
+    if (!aboutMenuOpen) return undefined;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!aboutMenuRef.current?.contains(event.target as Node))
+        setAboutMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAboutMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [aboutMenuOpen]);
+  useEffect(() => {
     let dispose: (() => void) | undefined;
     void listen("tray:toggle-clicker", () => {
       if (running) stop();
@@ -907,14 +1020,39 @@ function ClickerPage() {
           </div>
         </div>
         <div className="topbar-actions">
-          <Button
-            className="topbar-action"
-            onPress={() => setInfoPanel("help")}
-            size="sm"
-            variant="light"
-          >
-            帮助
-          </Button>
+          <div className="about-menu-wrap" ref={aboutMenuRef}>
+            <Button
+              aria-expanded={aboutMenuOpen}
+              aria-haspopup="menu"
+              className="topbar-action"
+              onPress={() => setAboutMenuOpen((open) => !open)}
+              size="sm"
+              variant="light"
+            >
+              关于⌄
+            </Button>
+            {aboutMenuOpen && (
+              <div className="about-menu" role="menu">
+                <button
+                  onClick={() => {
+                    setAboutMenuOpen(false);
+                    setInfoPanel("help");
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  帮助
+                </button>
+                <button
+                  onClick={openFeedbackDialog}
+                  role="menuitem"
+                  type="button"
+                >
+                  反馈
+                </button>
+              </div>
+            )}
+          </div>
           <Button
             className="topbar-action"
             onPress={() => setInfoPanel("logs")}
@@ -1296,6 +1434,127 @@ function ClickerPage() {
           </section>
         </div>
       )}
+      {feedbackDialogOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="feedback-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-title"
+          >
+            <div className="info-dialog-heading">
+              <div>
+                <p className="eyebrow">反馈</p>
+                <h2 id="feedback-title">问题反馈</h2>
+              </div>
+              <Button
+                aria-label="关闭反馈弹出层"
+                className="dialog-close-button"
+                isIconOnly
+                onPress={closeFeedbackDialog}
+                size="sm"
+                variant="light"
+              >
+                ×
+              </Button>
+            </div>
+            <textarea
+              className="feedback-textarea"
+              maxLength={5000}
+              onChange={(event) => setFeedbackMessage(event.target.value)}
+              placeholder="请描述遇到的问题或希望改进的地方"
+              value={feedbackMessage}
+            />
+            <div className="feedback-upload-row">
+              <label className="feedback-upload-button">
+                添加截图
+                <input
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  onChange={selectFeedbackFiles}
+                  type="file"
+                />
+              </label>
+              <small>最多 3 张，每张不超过 5 MiB</small>
+            </div>
+            {feedbackFiles.length > 0 && (
+              <div className="feedback-file-list">
+                {feedbackFiles.map(({ previewName }, index) => (
+                  <div
+                    className="feedback-file"
+                    key={`${previewName}-${index}`}
+                  >
+                    <span>{previewName}</span>
+                    <button
+                      onClick={() =>
+                        setFeedbackFiles((current) =>
+                          current.filter((_, fileIndex) => fileIndex !== index),
+                        )
+                      }
+                      type="button"
+                    >
+                      删除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {feedbackError && <p className="error">{feedbackError}</p>}
+            <div className="feedback-dialog-actions">
+              <Button
+                className="hero-button"
+                isDisabled={feedbackBusy}
+                onPress={closeFeedbackDialog}
+                size="sm"
+                variant="light"
+              >
+                关闭
+              </Button>
+              <Button
+                className="hero-button"
+                color="primary"
+                isDisabled={feedbackBusy}
+                onPress={() => void sendFeedback()}
+                size="sm"
+              >
+                {feedbackBusy ? "提交中…" : "提交反馈"}
+              </Button>
+            </div>
+            <div className="feedback-history">
+              <div className="feedback-history-heading">
+                <strong>我的反馈</strong>
+                <button onClick={() => void loadFeedback()} type="button">
+                  刷新
+                </button>
+              </div>
+              {feedbackItems.length > 0 ? (
+                feedbackItems.map((item) => (
+                  <article className="feedback-item" key={item.id}>
+                    <div className="feedback-item-meta">
+                      <span>
+                        {item.status === "replied" ? "已回复" : "处理中"}
+                      </span>
+                      <time>{new Date(item.created_at).toLocaleString()}</time>
+                    </div>
+                    <p>{item.message}</p>
+                    {item.reply && <blockquote>回复：{item.reply}</blockquote>}
+                    {item.attachments.length > 0 && (
+                      <small>
+                        附件：
+                        {item.attachments
+                          .map((file) => file.filename)
+                          .join("、")}
+                      </small>
+                    )}
+                  </article>
+                ))
+              ) : (
+                <p className="hint">暂无反馈记录</p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
       {updateDialogOpen && (
         <div className="modal-backdrop" role="presentation">
           <section
@@ -1388,10 +1647,22 @@ function ClickerPage() {
 }
 
 function AuthenticatedApp() {
-  if (new URLSearchParams(window.location.search).has("legacy-auth")) {
-    return <AuthPage onAuthenticated={(_session) => undefined} />;
-  }
-  return <ClickerPage />;
+  const [session, setSession] = useState<AuthSession | null>(() =>
+    getSession(),
+  );
+  useEffect(() => {
+    if (!session) return undefined;
+    const timer = window.setInterval(
+      () => {
+        void refreshSession(session)
+          .then(setSession)
+          .catch(() => undefined);
+      },
+      10 * 60 * 1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [session]);
+  return session ? <ClickerPage /> : <AuthPage onAuthenticated={setSession} />;
 }
 
 export default function App() {
