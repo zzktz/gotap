@@ -193,6 +193,16 @@ h2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 13px;
 }
+.click-params-card {
+  padding: 15px 16px;
+}
+.click-params-card .eyebrow {
+  margin-bottom: 5px;
+}
+.parameter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
 label {
   display: grid;
   gap: 6px;
@@ -663,6 +673,9 @@ footer {
   }
   .grid {
     grid-template-columns: 1fr;
+  }
+  .parameter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .controls {
     align-items: flex-start;

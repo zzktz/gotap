@@ -931,9 +931,9 @@ function ClickerPage({
               : "未添加步骤时，将点击当前坐标。"}
           </p>
         </div>
-        <div className="card">
+        <div className="card click-params-card">
           <p className="eyebrow">点击参数</p>
-          <div className="grid">
+          <div className="grid parameter-grid">
             <label>
               点击间隔（毫秒，最小 100）
               <input
@@ -970,11 +970,6 @@ function ClickerPage({
               </select>
             </label>
           </div>
-          <p className="hint">
-            点击次数为 0
-            时无限循环；点击间隔指两次按下开始之间的时间，按下时长固定为 5
-            毫秒。
-          </p>
         </div>
         <div className="card profile-card">
           <div className="section-heading">
