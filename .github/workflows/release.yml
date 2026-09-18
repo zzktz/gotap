@@ -92,7 +92,13 @@ jobs:
             exit 0
           fi
           echo "No bundled native helper requires separate signing."
-      - uses: tauri-apps/tauri-action@v0
+      # Keep the unsigned/ad-hoc path free of empty Apple API credentials.
+      # tauri-action treats the presence of APPLE_API_* variables as a
+      # request to notarize; exporting empty values makes notarytool fail
+      # with an invalid UUID when no Developer account is configured.
+      - name: Build and release (Apple-signed)
+        if: runner.os != 'macOS' || env.APPLE_SIGNING_ENABLED == 'true'
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -102,6 +108,22 @@ jobs:
           APPLE_API_ISSUER: ${{ env.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
           APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: GoTap ${{ github.ref_name }}
+          releaseBody: GoTap 桌面客户端自动构建版本。
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Build and release (unsigned macOS)
+        if: runner.os == 'macOS' && env.APPLE_SIGNING_ENABLED != 'true'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: GoTap ${{ github.ref_name }}
