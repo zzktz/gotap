@@ -839,15 +839,15 @@ function ClickerPage({
               <p className="eyebrow">目标位置</p>
               <h2>选择点击区域</h2>
             </div>
-            <span className={`state state-${status.state}`}>
-              {running
-                ? "运行中"
-                : status.state === "completed"
-                  ? "已完成"
-                  : status.state === "error"
-                    ? "错误"
-                    : "已停止"}
-            </span>
+            {!["idle", "stopped"].includes(status.state) && (
+              <span className={`state state-${status.state}`}>
+                {running
+                  ? "运行中"
+                  : status.state === "completed"
+                    ? "已完成"
+                    : "错误"}
+              </span>
+            )}
           </div>
           <div className="coordinates">
             <span>坐标</span>
