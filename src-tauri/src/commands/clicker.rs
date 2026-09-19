@@ -455,6 +455,10 @@ pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
         .title("选择点击区域")
         .decorations(false)
         .transparent(true)
+        // Windows keeps a native shadow around borderless transparent
+        // windows unless it is explicitly disabled. That shadow is rendered
+        // as an opaque light surface by some WebView2 versions.
+        .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .position(position.x as f64 / scale, position.y as f64 / scale)
