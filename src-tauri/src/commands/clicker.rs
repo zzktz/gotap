@@ -466,15 +466,11 @@ pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
         .position(position.x as f64 / scale, position.y as f64 / scale)
         .inner_size(size.width as f64 / scale, size.height as f64 / scale)
         .focused(index == 0)
-        .visible(false)
         .build()
         .map_err(|error| error.to_string())
         .and_then(|window| {
             #[cfg(target_os = "windows")]
-            if let Err(error) = set_selection_window_opacity(&window) {
-                let _ = window.destroy();
-                return Err(error);
-            }
+            let _ = set_selection_window_opacity(&window);
             // Explicitly show and focus the overlay after WebView2 has been
             // attached. Windows can otherwise leave a transparent, borderless
             // window hidden behind the main window on the first invocation.
