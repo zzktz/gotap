@@ -94,27 +94,6 @@ button:disabled {
   width: 25px;
   height: 25px;
 }
-.brand-mark.is-running .cursor-logo {
-  animation: cursor-click 0.55s ease-in-out infinite;
-  transform-origin: 35% 75%;
-}
-@keyframes cursor-click {
-  0%,
-  100% {
-    transform: translate(0, 0) rotate(0deg) scale(1);
-  }
-  45% {
-    transform: translate(1px, 1px) rotate(-5deg) scale(0.88);
-  }
-  70% {
-    transform: translate(-1px, -1px) rotate(2deg) scale(1.02);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .brand-mark.is-running .cursor-logo {
-    animation: none;
-  }
-}
 .account {
   display: flex;
   align-items: center;
@@ -291,6 +270,23 @@ h2 {
 }
 .field-help:hover {
   color: #2874a7;
+}
+.field-help-tooltip {
+  max-width: 260px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  color: #fff !important;
+  background: rgba(21, 43, 68, 0.92) !important;
+  font-size: 10px !important;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+  box-shadow: 0 5px 14px rgba(21, 43, 68, 0.2);
+}
+.field-help-tooltip-arrow {
+  color: rgba(21, 43, 68, 0.92) !important;
+  background: rgba(21, 43, 68, 0.92) !important;
 }
 .click-params-card .hero-input [data-slot="label"] {
   margin-bottom: 0;
@@ -702,9 +698,35 @@ h2 {
 .merged-controls .actions {
   margin-left: auto;
 }
-.merged-controls .error,
-.merged-controls > .hint {
+.run-info {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  min-height: 23px;
+  margin-top: 1px;
+  padding: 4px 8px;
+  border: 1px solid #e5edf2;
+  border-radius: 7px;
+}
+.run-info .error,
+.run-info .hint {
   margin: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.run-info-placeholder {
+  color: #9aa8b4;
+  font-size: 10px;
+}
+.run-info-state {
+  font-size: 11px;
+}
+.run-info-running {
+  color: #28734b;
+}
+.run-info-completed {
+  color: #205f91;
 }
 .start-countdown-overlay {
   position: fixed;
@@ -812,6 +834,17 @@ h2 {
   color: #1768a7;
   background: #eef7fc;
 }
+.help-icon {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
 .brand-version-button {
   display: inline-flex;
   align-items: center;
@@ -876,11 +909,23 @@ h2 {
   width: min(100%, 480px);
   max-height: min(680px, calc(100vh - 40px));
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #b8c4ce transparent;
   padding: 20px;
   border: 1px solid #dbe4ed;
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 20px 55px #183d5b33;
+}
+.feedback-dialog::-webkit-scrollbar {
+  width: 6px;
+}
+.feedback-dialog::-webkit-scrollbar-track {
+  background: transparent;
+}
+.feedback-dialog::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: #b8c4ce;
 }
 .feedback-textarea {
   display: block;
@@ -951,8 +996,7 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.feedback-file button,
-.feedback-history-heading button {
+.feedback-file button {
   flex: 0 0 auto;
   padding: 0;
   color: #3980a8;
@@ -965,55 +1009,13 @@ h2 {
   gap: 6px;
   margin-top: 14px;
 }
-.feedback-history {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid #edf1f4;
-}
-.feedback-history-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: #28445c;
-  font-size: 12px;
-}
-.feedback-item {
-  margin-top: 8px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  background: #f7fafc;
-}
-.feedback-item-meta {
-  display: flex;
-  justify-content: space-between;
-  color: #6e8292;
-  font-size: 10px;
-}
-.feedback-item-meta span {
-  color: #2b779a;
-  font-weight: 700;
-}
-.feedback-item p {
-  margin: 7px 0 0;
-  color: #3e566b;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-.feedback-item blockquote {
-  margin: 7px 0 0;
-  padding-left: 8px;
-  border-left: 2px solid #83b6d2;
-  color: #536f85;
+.feedback-success {
+  margin: 9px 0 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: #28734b;
+  background: #edf9f1;
   font-size: 11px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-.feedback-item small {
-  display: block;
-  margin-top: 6px;
-  color: #8291a0;
-  font-size: 10px;
 }
 .info-dialog-heading {
   display: flex;

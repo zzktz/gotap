@@ -28,7 +28,7 @@ SQLite 数据库默认使用 WAL 模式和 5 秒 busy timeout。`usage_reports` 
 - `GET /v1/me`
 - `GET /v1/usage/today`
 - `GET /v1/feedback` (用户查看自己的反馈与回复)
-- `POST /v1/feedback` (用户提交文字反馈和截图)
+- `POST /v1/feedback` (无需登录即可提交文字反馈和截图；登录后提交可在客户端查看回复)
 - `POST /v1/devices/register`
 - `POST /v1/proxy/lease`
 - `POST /v1/proxy/lease/refresh`

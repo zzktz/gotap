@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { relaunch } from "@tauri-apps/plugin-process";
+import { exit, relaunch } from "@tauri-apps/plugin-process";
 import {
   check,
   type DownloadEvent,
@@ -11,7 +11,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Checkbox,
-  Chip,
   Input,
   Select,
   SelectItem,
@@ -21,7 +20,6 @@ import appPackage from "../package.json";
 import {
   clearRememberedLogin,
   formatErrorMessage,
-  getFeedback,
   getAuthSettings,
   getRememberedLogin,
   getSession,
@@ -34,7 +32,7 @@ import {
   saveRememberedLogin,
   submitFeedback,
 } from "./auth";
-import type { AuthSession, FeedbackItem } from "./auth";
+import type { AuthSession } from "./auth";
 
 type Mode = "login" | "register" | "forgot";
 type InfoPanel = "help" | "logs" | null;
@@ -163,7 +161,14 @@ function FieldLabel({
   return (
     <span className="field-label">
       {children}
-      <Tooltip content={description} placement="top">
+      <Tooltip
+        classNames={{
+          content: "field-help-tooltip",
+          arrow: "field-help-tooltip-arrow",
+        }}
+        content={description}
+        placement="top"
+      >
         <span
           aria-label={`${children}说明`}
           className="field-help"
@@ -562,7 +567,7 @@ function AuthPage({
   );
 }
 
-function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
+function ClickerPage() {
   const [profile, setProfile] = useState<ClickProfile>(DEFAULT_PROFILE);
   const [status, setStatus] = useState<ClickerStatus>({
     state: "idle",
@@ -572,14 +577,15 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
   });
   const [message, setMessage] = useState("");
   const [startCountdown, setStartCountdown] = useState(0);
+  const startPending = useRef(false);
   const [infoPanel, setInfoPanel] = useState<InfoPanel>(null);
   const [aboutMenuOpen, setAboutMenuOpen] = useState(false);
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-  const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [feedbackFiles, setFeedbackFiles] = useState<FeedbackFile[]>([]);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
+  const [feedbackSuccess, setFeedbackSuccess] = useState("");
   const aboutMenuRef = useRef<HTMLDivElement>(null);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [hasAvailableUpdate, setHasAvailableUpdate] = useState(false);
@@ -844,32 +850,19 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
     persistRunLogs([]);
     setMessage("运行日志已清空");
   };
-  const loadFeedback = async () => {
-    setFeedbackBusy(true);
-    setFeedbackError("");
-    try {
-      setFeedbackItems(await getFeedback());
-    } catch (error) {
-      setFeedbackError(formatErrorMessage(error));
-    } finally {
-      setFeedbackBusy(false);
-    }
-  };
   const openFeedbackDialog = () => {
     setAboutMenuOpen(false);
-    if (!getSession()) {
-      onRequireLogin();
-      return;
-    }
     setFeedbackDialogOpen(true);
     setFeedbackMessage("");
     setFeedbackFiles([]);
-    void loadFeedback();
+    setFeedbackError("");
+    setFeedbackSuccess("");
   };
   const closeFeedbackDialog = () => {
     if (feedbackBusy) return;
     setFeedbackDialogOpen(false);
     setFeedbackError("");
+    setFeedbackSuccess("");
   };
   const selectFeedbackFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
@@ -914,6 +907,7 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
     }
     setFeedbackBusy(true);
     setFeedbackError("");
+    setFeedbackSuccess("");
     try {
       const screenshots = await Promise.all(
         feedbackFiles.map(async ({ file, previewName }) => ({
@@ -921,11 +915,10 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
           data: await encodeFeedbackFile(file),
         })),
       );
-      const item = await submitFeedback(message, screenshots);
-      setFeedbackItems((current) => [item, ...current].slice(0, 50));
+      await submitFeedback(message, screenshots);
       setFeedbackMessage("");
       setFeedbackFiles([]);
-      setMessage("反馈已提交");
+      setFeedbackSuccess("反馈已提交，感谢你的反馈！");
     } catch (error) {
       setFeedbackError(formatErrorMessage(error));
     } finally {
@@ -949,6 +942,11 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
     return () => window.clearInterval(timer);
   }, [startCountdown]);
   const start = async () => {
+    // HeroUI can deliver more than one press event for a very quick mouse
+    // interaction. Keep the start operation idempotent while the countdown
+    // and native clicker startup are in progress.
+    if (startPending.current || runningRef.current || startCountdown > 0) return;
+    startPending.current = true;
     setMessage("");
     setStartCountdown(START_DELAY_SECONDS);
     const effectiveProfile = normalizeProfile(profile);
@@ -957,39 +955,57 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
       await invoke("save_settings", { profile: effectiveProfile });
       await invoke("start_clicking", { profile: effectiveProfile });
     } catch (error) {
+      startPending.current = false;
       setStartCountdown(0);
       setMessage(formatErrorMessage(error));
     }
   };
   const stop = () => {
+    startPending.current = false;
     setStartCountdown(0);
     void invoke("stop_clicking_command").catch((error) =>
       setMessage(formatErrorMessage(error)),
     );
   };
   const running = status.state === "running";
+  const runningRef = useRef(running);
+  runningRef.current = running;
+  const startRef = useRef<() => void>(() => undefined);
+  const stopRef = useRef<() => void>(() => undefined);
+  startRef.current = () => void start();
+  stopRef.current = stop;
   useEffect(() => {
-    if (status.state !== "running") setStartCountdown(0);
+    if (status.state !== "running") {
+      setStartCountdown(0);
+      if (["idle", "stopped", "completed", "error"].includes(status.state))
+        startPending.current = false;
+    } else {
+      startPending.current = false;
+    }
   }, [status.state]);
   useEffect(() => {
+    let active = true;
     let disposeToggle: (() => void) | undefined;
     let disposeStop: (() => void) | undefined;
     void listen("hotkey:toggle", () => {
-      if (running) stop();
-      else void start();
+      if (runningRef.current) stopRef.current();
+      else startRef.current();
     }).then((unlisten) => {
-      disposeToggle = unlisten;
+      if (active) disposeToggle = unlisten;
+      else unlisten();
     });
     void listen("hotkey:stop", () => {
-      if (running) stop();
+      if (runningRef.current) stopRef.current();
     }).then((unlisten) => {
-      disposeStop = unlisten;
+      if (active) disposeStop = unlisten;
+      else unlisten();
     });
     return () => {
+      active = false;
       disposeToggle?.();
       disposeStop?.();
     };
-  }, [running, profile]);
+  }, []);
   useEffect(() => {
     if (!aboutMenuOpen) return undefined;
     const closeOnOutsideClick = (event: PointerEvent) => {
@@ -1007,20 +1023,25 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
     };
   }, [aboutMenuOpen]);
   useEffect(() => {
+    let active = true;
     let dispose: (() => void) | undefined;
     void listen("tray:toggle-clicker", () => {
-      if (running) stop();
-      else void start();
+      if (runningRef.current) stopRef.current();
+      else startRef.current();
     }).then((unlisten) => {
-      dispose = unlisten;
+      if (active) dispose = unlisten;
+      else unlisten();
     });
-    return () => dispose?.();
-  }, [running, profile]);
+    return () => {
+      active = false;
+      dispose?.();
+    };
+  }, []);
   return (
     <main className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className={`brand-mark${running ? " is-running" : ""}`}>
+          <div className="brand-mark">
             <CursorLogo />
           </div>
           <div>
@@ -1045,24 +1066,18 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
           </div>
         </div>
         <div className="topbar-actions">
-          <Button
-            className="topbar-action"
-            onPress={() => setInfoPanel("logs")}
-            size="sm"
-            variant="light"
-          >
-            记录
-          </Button>
           <div className="about-menu-wrap" ref={aboutMenuRef}>
             <Button
+              aria-label="打开帮助与反馈菜单"
               aria-expanded={aboutMenuOpen}
               aria-haspopup="menu"
               className="topbar-action"
               onPress={() => setAboutMenuOpen((open) => !open)}
               size="sm"
+              title="帮助与反馈"
               variant="light"
             >
-              关于⌄
+              <span className="help-icon" aria-hidden="true">?</span>
             </Button>
             {aboutMenuOpen && (
               <div className="about-menu" role="menu">
@@ -1082,6 +1097,16 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
                   type="button"
                 >
                   反馈
+                </button>
+                <button
+                  onClick={() => {
+                    setAboutMenuOpen(false);
+                    void exit(0);
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  退出
                 </button>
               </div>
             )}
@@ -1103,25 +1128,6 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
               >
                 选择区域
               </Button>
-              {!["idle", "stopped"].includes(status.state) && (
-                <Chip
-                  color={
-                    running
-                      ? "success"
-                      : status.state === "completed"
-                        ? "primary"
-                        : "danger"
-                  }
-                  size="sm"
-                  variant="flat"
-                >
-                  {running
-                    ? "运行中"
-                    : status.state === "completed"
-                      ? "已完成"
-                      : "错误"}
-                </Chip>
-              )}
             </div>
           </div>
           <div className="coordinates">
@@ -1190,7 +1196,7 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
               <Button
                 className="hero-button primary-action-button"
                 color="primary"
-                isDisabled={running}
+                isDisabled={running || startCountdown > 0}
                 onPress={() => void start()}
               >
                 开始点击
@@ -1204,18 +1210,30 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
                 停止
               </Button>
             </div>
-            {status.error && <p className="error">{status.error}</p>}
-            {message && <p className="hint">{message}</p>}
+            <div className="run-info" role="status" aria-live="polite">
+              {status.error ? (
+                <p className="error">{status.error}</p>
+              ) : message ? (
+                <p className="hint">{message}</p>
+              ) : running ? (
+                <span className="run-info-state run-info-running">正在运行</span>
+              ) : status.state === "completed" ? (
+                <span className="run-info-state run-info-completed">已完成</span>
+              ) : (
+                <span className="run-info-placeholder">
+                  运行状态和操作提示显示在这里
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="card click-params-card">
-          <p className="eyebrow">点击设置</p>
           <div className="grid parameter-grid">
             <Input
               className="hero-input"
               label={
                 <FieldLabel description="两次点击之间的时间间隔，最小为 100 毫秒">
-                  点击间隔
+                  间隔时间
                 </FieldLabel>
               }
               labelPlacement="outside"
@@ -1527,6 +1545,11 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
               </div>
             )}
             {feedbackError && <p className="error">{feedbackError}</p>}
+            {feedbackSuccess && (
+              <p className="feedback-success" role="status">
+                {feedbackSuccess}
+              </p>
+            )}
             <div className="feedback-dialog-actions">
               <Button
                 className="hero-button"
@@ -1546,38 +1569,6 @@ function ClickerPage({ onRequireLogin }: { onRequireLogin: () => void }) {
               >
                 {feedbackBusy ? "提交中…" : "提交反馈"}
               </Button>
-            </div>
-            <div className="feedback-history">
-              <div className="feedback-history-heading">
-                <strong>我的反馈</strong>
-                <button onClick={() => void loadFeedback()} type="button">
-                  刷新
-                </button>
-              </div>
-              {feedbackItems.length > 0 ? (
-                feedbackItems.map((item) => (
-                  <article className="feedback-item" key={item.id}>
-                    <div className="feedback-item-meta">
-                      <span>
-                        {item.status === "replied" ? "已回复" : "处理中"}
-                      </span>
-                      <time>{new Date(item.created_at).toLocaleString()}</time>
-                    </div>
-                    <p>{item.message}</p>
-                    {item.reply && <blockquote>回复：{item.reply}</blockquote>}
-                    {item.attachments.length > 0 && (
-                      <small>
-                        附件：
-                        {item.attachments
-                          .map((file) => file.filename)
-                          .join("、")}
-                      </small>
-                    )}
-                  </article>
-                ))
-              ) : (
-                <p className="hint">暂无反馈记录</p>
-              )}
             </div>
           </section>
         </div>
@@ -1700,7 +1691,7 @@ function AuthenticatedApp() {
       />
     );
   }
-  return <ClickerPage onRequireLogin={() => setLoginRequired(true)} />;
+  return <ClickerPage />;
 }
 
 export default function App() {

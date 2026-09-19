@@ -800,7 +800,7 @@ def init_db() -> None:
             );
             CREATE TABLE IF NOT EXISTS feedback (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
                 message TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'open',
                 reply TEXT,
@@ -840,6 +840,39 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_feedback_status_created ON feedback(status, created_at DESC);
             """
         )
+        # Existing deployments created feedback.user_id as NOT NULL while
+        # feedback required a logged-in user. Rebuild that table once so new
+        # submissions can be anonymous without losing existing feedback.
+        feedback_columns = connection.execute("PRAGMA table_info(feedback)").fetchall()
+        user_id_column = next((column for column in feedback_columns if column["name"] == "user_id"), None)
+        if user_id_column is not None and int(user_id_column["notnull"]):
+            connection.execute("PRAGMA foreign_keys = OFF")
+            try:
+                connection.execute("DROP INDEX IF EXISTS idx_feedback_user_created")
+                connection.execute("DROP INDEX IF EXISTS idx_feedback_status_created")
+                connection.execute("ALTER TABLE feedback RENAME TO feedback_legacy")
+                connection.execute(
+                    """CREATE TABLE feedback (
+                           id TEXT PRIMARY KEY,
+                           user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+                           message TEXT NOT NULL,
+                           status TEXT NOT NULL DEFAULT 'open',
+                           reply TEXT,
+                           created_at TEXT NOT NULL,
+                           updated_at TEXT NOT NULL,
+                           replied_at TEXT
+                       )"""
+                )
+                connection.execute(
+                    """INSERT INTO feedback(id, user_id, message, status, reply, created_at, updated_at, replied_at)
+                       SELECT id, user_id, message, status, reply, created_at, updated_at, replied_at
+                       FROM feedback_legacy"""
+                )
+                connection.execute("DROP TABLE feedback_legacy")
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_feedback_user_created ON feedback(user_id, created_at DESC)")
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_feedback_status_created ON feedback(status, created_at DESC)")
+            finally:
+                connection.execute("PRAGMA foreign_keys = ON")
         # Create the compatibility relay before migrating relay_health because
         # the new health table has a foreign key to relays(id).
         relay_created_at = iso(now())
@@ -1225,6 +1258,20 @@ def current_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Dep
     return row
 
 
+def optional_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> sqlite3.Row | None:
+    """Resolve a user when a token is supplied, while allowing public requests."""
+    if not credentials:
+        return None
+    try:
+        return current_user(credentials)
+    except HTTPException as error:
+        # Feedback is public. A stale desktop session must not turn an
+        # otherwise anonymous submission into a misleading "登录已过期" error.
+        if error.status_code == status.HTTP_401_UNAUTHORIZED:
+            return None
+        raise
+
+
 def current_admin(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> dict[str, str]:
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
@@ -1310,7 +1357,11 @@ def _feedback_payload(row: sqlite3.Row, attachments: list[sqlite3.Row], *, inclu
         "attachments": [_feedback_attachment_payload(attachment) for attachment in attachments],
     }
     if include_user:
-        payload["user"] = {"id": row["user_id"], "name": row["name"], "email": row["email"]}
+        payload["user"] = {
+            "id": row["user_id"],
+            "name": row["name"] or "匿名用户",
+            "email": row["email"] or "",
+        }
     return payload
 
 
@@ -1791,7 +1842,7 @@ def user_feedback(user: Annotated[sqlite3.Row, Depends(current_user)]) -> dict:
 
 
 @app.post("/v1/feedback", status_code=status.HTTP_201_CREATED)
-def create_feedback(payload: FeedbackCreateRequest, user: Annotated[sqlite3.Row, Depends(current_user)]) -> dict:
+def create_feedback(payload: FeedbackCreateRequest, user: Annotated[sqlite3.Row | None, Depends(optional_user)]) -> dict:
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请填写反馈内容")
@@ -1810,7 +1861,7 @@ def create_feedback(payload: FeedbackCreateRequest, user: Annotated[sqlite3.Row,
         with db() as connection:
             connection.execute(
                 "INSERT INTO feedback(id, user_id, message, status, created_at, updated_at) VALUES (?, ?, ?, 'open', ?, ?)",
-                (feedback_id, user["id"], message, created_at, created_at),
+                (feedback_id, user["id"] if user else None, message, created_at, created_at),
             )
             for attachment_id, destination, filename, content_type, size_bytes in saved:
                 connection.execute(
@@ -2790,16 +2841,16 @@ def admin_feedback(
         params.append(status_filter)
     if keyword.strip():
         term = f"%{keyword.strip()}%"
-        conditions.append("(f.message LIKE ? OR u.name LIKE ? OR u.email LIKE ?)")
+        conditions.append("(f.message LIKE ? OR COALESCE(u.name, '匿名用户') LIKE ? OR COALESCE(u.email, '') LIKE ?)")
         params.extend([term, term, term])
     where = " AND ".join(conditions)
     offset = (page - 1) * page_size
     with db() as connection:
         total = connection.execute(
-            f"SELECT COUNT(*) FROM feedback f JOIN users u ON u.id = f.user_id WHERE {where}", params
+            f"SELECT COUNT(*) FROM feedback f LEFT JOIN users u ON u.id = f.user_id WHERE {where}", params
         ).fetchone()[0]
         rows = connection.execute(
-            f"""SELECT f.*, u.name, u.email FROM feedback f JOIN users u ON u.id = f.user_id
+            f"""SELECT f.*, u.name, u.email FROM feedback f LEFT JOIN users u ON u.id = f.user_id
                 WHERE {where} ORDER BY CASE f.status WHEN 'open' THEN 0 ELSE 1 END, f.updated_at DESC
                 LIMIT ? OFFSET ?""",
             [*params, page_size, offset],
@@ -2827,7 +2878,7 @@ def admin_reply_feedback(
         if cursor.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="反馈不存在")
         row = connection.execute(
-            "SELECT f.*, u.name, u.email FROM feedback f JOIN users u ON u.id = f.user_id WHERE f.id = ?",
+            "SELECT f.*, u.name, u.email FROM feedback f LEFT JOIN users u ON u.id = f.user_id WHERE f.id = ?",
             (feedback_id,),
         ).fetchone()
         attachments = _feedback_attachments(connection, feedback_id)

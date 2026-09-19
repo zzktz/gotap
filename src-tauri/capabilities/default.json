@@ -5,6 +5,7 @@
   "windows": ["main", "selection", "selection-*"],
   "permissions": [
     "core:default",
+    "process:allow-exit",
     "process:allow-restart",
     "global-shortcut:default",
     "updater:default"

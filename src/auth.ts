@@ -101,6 +101,10 @@ export function getSession(): AuthSession | null {
   }
 }
 
+export function clearSession(): void {
+  localStorage.removeItem(SESSION_KEY);
+}
+
 export interface RememberedLogin {
   email: string;
   password: string;
