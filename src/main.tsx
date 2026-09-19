@@ -20,12 +20,8 @@ if (isSelectionWindow) {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {isSelectionWindow ? (
+    <HeroUIProvider>
       <App />
-    ) : (
-      <HeroUIProvider>
-        <App />
-      </HeroUIProvider>
-    )}
+    </HeroUIProvider>
   </React.StrictMode>,
 );

@@ -455,17 +455,23 @@ pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
         .title("选择点击区域")
         .decorations(false)
         .transparent(true)
-        // Windows keeps a native shadow around borderless transparent
-        // windows unless it is explicitly disabled. That shadow is rendered
-        // as an opaque light surface by some WebView2 versions.
-        .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .position(position.x as f64 / scale, position.y as f64 / scale)
         .inner_size(size.width as f64 / scale, size.height as f64 / scale)
         .focused(index == 0)
         .build()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())
+        .and_then(|window| {
+            // Explicitly show and focus the overlay after WebView2 has been
+            // attached. Windows can otherwise leave a transparent, borderless
+            // window hidden behind the main window on the first invocation.
+            window.show().map_err(|error| error.to_string())?;
+            if index == 0 {
+                window.set_focus().map_err(|error| error.to_string())?;
+            }
+            Ok(window)
+        })?;
     }
     Ok(())
 }
