@@ -430,7 +430,9 @@ pub fn get_cursor_position() -> Result<(i32, i32), String> {
 }
 
 #[tauri::command]
-pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
+// WebView2 can deadlock when a WebviewWindow is created from a synchronous
+// command. Keep this command async so selection windows render on Windows.
+pub async fn open_selection_window(app: AppHandle) -> Result<(), String> {
     destroy_selection_windows(&app);
     let monitors = app
         .available_monitors()
@@ -467,7 +469,7 @@ pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn close_selection_windows(app: AppHandle) {
+pub async fn close_selection_windows(app: AppHandle) {
     destroy_selection_windows(&app);
 }
 
