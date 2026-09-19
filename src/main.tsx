@@ -16,6 +16,21 @@ const isSelectionWindow = new URLSearchParams(window.location.search).has(
 );
 if (isSelectionWindow) {
   document.documentElement.classList.add("selection-mode");
+  // WebView2 can apply its default white canvas before the stylesheet rules
+  // are resolved. Set all three document layers inline for the selection
+  // window so the native transparent surface is preserved on Windows.
+  for (const element of [
+    document.documentElement,
+    document.body,
+    document.getElementById("root"),
+  ]) {
+    element?.style.setProperty("background", "rgba(0, 0, 0, 0)", "important");
+    element?.style.setProperty(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+      "important",
+    );
+  }
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

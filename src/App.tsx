@@ -260,6 +260,9 @@ function SelectionOverlay() {
   return (
     <main
       className={`selection-overlay${selection ? " has-selection" : ""}`}
+      style={{
+        backgroundColor: selection ? "transparent" : "rgba(0, 0, 0, 0.46)",
+      }}
       onMouseDown={(event) => {
         if (event.button !== 0) return;
         if (isInsideSelection(event.clientX, event.clientY) && selection) {
