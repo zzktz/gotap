@@ -28,9 +28,7 @@ body,
 html.selection-mode,
 html.selection-mode body,
 html.selection-mode #root {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
+  background: transparent;
 }
 body {
   min-height: 100vh;
@@ -587,8 +585,7 @@ h2 {
   overflow: hidden;
   cursor: crosshair;
   user-select: none;
-  background-color: rgba(0, 0, 0, 0.46);
-  background-image: none;
+  background: rgba(0, 0, 0, 0.46);
 }
 .selection-overlay.has-selection {
   background: transparent;

@@ -430,7 +430,9 @@ pub fn get_cursor_position() -> Result<(i32, i32), String> {
 }
 
 #[tauri::command]
-pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
+// WebView2 can deadlock when a WebviewWindow is created from a synchronous
+// command. Keep this command async so selection windows render on Windows.
+pub async fn open_selection_window(app: AppHandle) -> Result<(), String> {
     destroy_selection_windows(&app);
     let monitors = app
         .available_monitors()
@@ -442,14 +444,8 @@ pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
         let scale = monitor.scale_factor();
         let position = monitor.position();
         let size = monitor.size();
-        let native_alpha_query = if cfg!(target_os = "windows") {
-            "&nativeAlpha=1"
-        } else {
-            ""
-        };
         let url = format!(
-            "index.html?selection=1{}&offsetX={}&offsetY={}",
-            native_alpha_query,
+            "index.html?selection=1&offsetX={}&offsetY={}",
             position.x as f64 / scale,
             position.y as f64 / scale
         );
@@ -467,25 +463,13 @@ pub fn open_selection_window(app: AppHandle) -> Result<(), String> {
         .inner_size(size.width as f64 / scale, size.height as f64 / scale)
         .focused(index == 0)
         .build()
-        .map_err(|error| error.to_string())
-        .and_then(|window| {
-            #[cfg(target_os = "windows")]
-            let _ = set_selection_window_opacity(&window);
-            // Explicitly show and focus the overlay after WebView2 has been
-            // attached. Windows can otherwise leave a transparent, borderless
-            // window hidden behind the main window on the first invocation.
-            window.show().map_err(|error| error.to_string())?;
-            if index == 0 {
-                window.set_focus().map_err(|error| error.to_string())?;
-            }
-            Ok(window)
-        })?;
+        .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn close_selection_windows(app: AppHandle) {
+pub async fn close_selection_windows(app: AppHandle) {
     destroy_selection_windows(&app);
 }
 
@@ -495,24 +479,6 @@ fn destroy_selection_windows(app: &AppHandle) {
             let _ = window.destroy();
         }
     }
-}
-
-#[cfg(target_os = "windows")]
-fn set_selection_window_opacity(window: &tauri::WebviewWindow) -> Result<(), String> {
-    use windows::Win32::Foundation::COLORREF;
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongW, SetLayeredWindowAttributes, SetWindowLongW, GWL_EXSTYLE, LWA_ALPHA,
-        WS_EX_LAYERED,
-    };
-
-    let hwnd = window.hwnd().map_err(|error| error.to_string())?;
-    let style = unsafe { GetWindowLongW(hwnd, GWL_EXSTYLE) };
-    unsafe {
-        SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as i32);
-        SetLayeredWindowAttributes(hwnd, COLORREF(0), 117, LWA_ALPHA)
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(())
 }
 
 #[tauri::command]

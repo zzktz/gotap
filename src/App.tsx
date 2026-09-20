@@ -208,7 +208,6 @@ function SelectionOverlay() {
     y: number;
   } | null>(null);
   const params = new URLSearchParams(window.location.search);
-  const nativeAlpha = params.get("nativeAlpha") === "1";
   const offsetX = Number(params.get("offsetX") ?? 0);
   const offsetY = Number(params.get("offsetY") ?? 0);
   const close = async () => {
@@ -261,13 +260,6 @@ function SelectionOverlay() {
   return (
     <main
       className={`selection-overlay${selection ? " has-selection" : ""}`}
-      style={{
-        backgroundColor: selection
-          ? "transparent"
-          : nativeAlpha
-            ? "#000"
-            : "rgba(0, 0, 0, 0.46)",
-      }}
       onMouseDown={(event) => {
         if (event.button !== 0) return;
         if (isInsideSelection(event.clientX, event.clientY) && selection) {

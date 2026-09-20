@@ -1,6 +1,6 @@
 [package]
 name = "gotap"
-version = "0.1.10"
+version = "0.1.11"
 description = "GoTap desktop auto clicker"
 license = "MIT"
 repository = "https://github.com/zzktz/gotap"
@@ -29,9 +29,6 @@ tauri-plugin-process = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "zip"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [profile.release]
 codegen-units = 1
