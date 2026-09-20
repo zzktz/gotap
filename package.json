@@ -1,6 +1,6 @@
 {
   "name": "gotap",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "GoTap desktop auto clicker",
   "type": "module",
   "scripts": {

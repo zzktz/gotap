@@ -226,9 +226,17 @@ fn move_mouse_to(enigo: &mut Enigo, x: i32, y: i32) -> Result<(), String> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        enigo
-            .move_mouse(x, y, Coordinate::Abs)
-            .map_err(|error| error.to_string())
+        for _ in 0..10 {
+            enigo
+                .move_mouse(x, y, Coordinate::Abs)
+                .map_err(|error| error.to_string())?;
+            thread::sleep(Duration::from_millis(5));
+            let (actual_x, actual_y) = cursor_position(enigo)?;
+            if (actual_x - x).abs() <= 1 && (actual_y - y).abs() <= 1 {
+                return Ok(());
+            }
+        }
+        Err("鼠标未能移动到目标位置".into())
     }
 }
 
@@ -243,21 +251,7 @@ fn cursor_position(_enigo: &Enigo) -> Result<(i32, i32), String> {
             .map_err(|error| error.to_string())
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        use core_graphics::{
-            event::CGEvent,
-            event_source::{CGEventSource, CGEventSourceStateID},
-        };
-
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
-            .map_err(|_| "无法读取 macOS 鼠标位置".to_string())?;
-        let event = CGEvent::new(source).map_err(|_| "无法读取 macOS 鼠标位置".to_string())?;
-        let point = event.location();
-        Ok((point.x.round() as i32, point.y.round() as i32))
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[cfg(not(target_os = "windows"))]
     {
         _enigo.location().map_err(|error| error.to_string())
     }
@@ -282,6 +276,24 @@ enum CursorSleepResult {
     Completed,
     Cancelled,
     LeftTarget,
+}
+
+// The coordinate space reported by the desktop can differ slightly from the
+// coordinate space used when the selection overlay was rendered (notably on
+// scaled macOS displays).  Once the cursor has been moved, use the position
+// actually reported by the OS as the center of the guard area.  This prevents
+// a valid first click from being rejected because of a constant origin offset,
+// while still stopping when the user moves outside the selected rectangle.
+fn cursor_guard_target(
+    actual_center: (i32, i32),
+    selected_target: (i32, i32, u32, u32),
+) -> (i32, i32, u32, u32) {
+    (
+        actual_center.0,
+        actual_center.1,
+        selected_target.2,
+        selected_target.3,
+    )
 }
 
 fn interruptible_sleep_with_cursor_check(
@@ -401,11 +413,25 @@ pub fn start_clicking(
                 }
                 break;
             }
+            // Read the cursor after the move and anchor the safety check to
+            // that actual position.  This handles desktop scaling/origin
+            // differences without disabling the move-out protection.
+            let guard_target = match cursor_position(&enigo) {
+                Ok(actual) => cursor_guard_target(actual, target),
+                Err(error) => {
+                    if let Ok(mut status) = runtime.status.lock() {
+                        status.state = "error".into();
+                        status.error = Some(error);
+                    }
+                    let _ = enigo.button(button, Direction::Release);
+                    break;
+                }
+            };
             let press_result = interruptible_sleep_with_cursor_check(
                 &cancel,
                 Duration::from_millis(profile.press_duration_ms),
                 &mut enigo,
-                target,
+                guard_target,
             );
             let _ = enigo.button(button, Direction::Release);
             match press_result {
@@ -439,7 +465,7 @@ pub fn start_clicking(
                 &cancel,
                 Duration::from_millis(gap),
                 &mut enigo,
-                target,
+                guard_target,
             ) {
                 Ok(CursorSleepResult::Completed) => {}
                 Ok(CursorSleepResult::Cancelled) => break,
@@ -656,6 +682,14 @@ mod tests {
         assert!(point_inside_target((110, 205), target));
         assert!(!point_inside_target((89, 200), target));
         assert!(!point_inside_target((100, 206), target));
+    }
+
+    #[test]
+    fn cursor_guard_preserves_area_size_at_actual_position() {
+        assert_eq!(
+            cursor_guard_target((1_200, 800), (100, 200, 20, 10)),
+            (1_200, 800, 20, 10)
+        );
     }
 }
 

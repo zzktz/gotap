@@ -1319,9 +1319,8 @@ dependencies = [
 
 [[package]]
 name = "gotap"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
- "core-graphics 0.23.2",
  "dirs 5.0.1",
  "enigo",
  "log",

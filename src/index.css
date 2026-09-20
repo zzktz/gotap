@@ -626,6 +626,27 @@ h2 {
   border-radius: 8px;
   font-size: 12px;
 }
+.target-card .target-step-button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px !important;
+  height: 24px !important;
+  min-width: 52px;
+  padding-inline: 8px !important;
+  border: 1px solid #c6d9e6 !important;
+  border-radius: 6px !important;
+  color: #1768a7 !important;
+  background: #f4f9fc !important;
+  font-size: 10px !important;
+  font-weight: 400;
+  box-shadow: none !important;
+}
+.target-card .target-step-button:hover:not(:disabled),
+.target-card .target-step-button[data-hover="true"] {
+  border-color: #9dbed3 !important;
+  background: #e9f4fa !important;
+}
 .target-card .target-actions {
   gap: 6px;
   margin-top: 8px;

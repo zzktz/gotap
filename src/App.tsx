@@ -746,6 +746,8 @@ function ClickerPage() {
     });
     let disposeSelection: (() => void) | undefined;
     void listen<SelectionPayload>("selection:completed", (event) => {
+      // Keep already configured steps while selecting the next area. This
+      // allows the user to select an area, add it as a step, then repeat.
       setProfile((current) => ({ ...current, ...event.payload }));
     }).then((unlisten) => {
       disposeSelection = unlisten;
@@ -815,6 +817,25 @@ function ClickerPage() {
     } catch (error) {
       setMessage(formatErrorMessage(error));
     }
+  };
+  const addCurrentTarget = () => {
+    if (profile.width <= 0 || profile.height <= 0) {
+      setMessage("请先选择一个有效区域");
+      return;
+    }
+    setProfile((current) => ({
+      ...current,
+      targets: [
+        ...current.targets,
+        {
+          x: current.x,
+          y: current.y,
+          width: current.width,
+          height: current.height,
+        },
+      ],
+    }));
+    setMessage("当前区域已添加为步骤");
   };
   const removeTarget = (index: number) => {
     setProfile((current) => ({
@@ -998,6 +1019,10 @@ function ClickerPage() {
   startRef.current = () => void start();
   stopRef.current = stop;
   useEffect(() => {
+    // A delayed initial status response (or a late event from a previous
+    // run) must not cancel the three-second hand-release countdown that is
+    // already in progress.  The start/stop handlers own that pending state.
+    if (startPending.current && status.state !== "running") return;
     if (status.state !== "running") {
       setStartCountdown(0);
       if (["idle", "stopped", "completed", "error"].includes(status.state))
@@ -1165,14 +1190,24 @@ function ClickerPage() {
             )}
           </div>
           <div className="target-actions">
+            <Button
+              className="hero-button target-step-button"
+              variant="bordered"
+              onPress={addCurrentTarget}
+              isDisabled={running}
+              size="sm"
+            >
+              添加步骤
+            </Button>
             {profile.targets.length > 0 && (
               <Button
-                className="hero-button"
+                className="hero-button target-step-button"
                 variant="bordered"
                 onPress={() =>
                   setProfile((current) => ({ ...current, targets: [] }))
                 }
                 isDisabled={running}
+                size="sm"
               >
                 清空
               </Button>
@@ -1205,7 +1240,7 @@ function ClickerPage() {
           )}
           {profile.targets.length > 0 && (
             <p className="hint">
-              已添加 {profile.targets.length} 个步骤，将按顺序循环。
+              已添加 {profile.targets.length} 个步骤，将按顺序循环点击。
             </p>
           )}
           <div className="merged-controls">
