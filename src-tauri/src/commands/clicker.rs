@@ -201,10 +201,40 @@ fn resolve_click_point(
 fn move_mouse_to(enigo: &mut Enigo, x: i32, y: i32) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::UI::WindowsAndMessaging::SetCursorPos;
+        use windows::Win32::{
+            Foundation::POINT,
+            UI::WindowsAndMessaging::{GetCursorPos, SetCursorPos},
+        };
 
-        unsafe { SetCursorPos(x, y) }.map_err(|error| error.to_string())?;
-        return Ok(());
+        // SetCursorPos uses the physical virtual-desktop coordinate space. On
+        // Windows, a DPI transition or a just-created overlay can occasionally
+        // make the first call arrive before the cursor position is updated, so
+        // verify the result and retry briefly before falling back to Enigo.
+        let mut last_error = None;
+        for _ in 0..3 {
+            match unsafe { SetCursorPos(x, y) } {
+                Ok(()) => {
+                    let mut point = POINT { x: 0, y: 0 };
+                    if unsafe { GetCursorPos(&mut point) }.is_ok() && point.x == x && point.y == y {
+                        return Ok(());
+                    }
+                }
+                Err(error) => last_error = Some(error.to_string()),
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        // Keep a fallback for Windows environments where SetCursorPos is
+        // temporarily rejected by the desktop/input state.
+        enigo
+            .move_mouse(x, y, Coordinate::Abs)
+            .map_err(|error| last_error.clone().unwrap_or_else(|| error.to_string()))?;
+        let mut point = POINT { x: 0, y: 0 };
+        if unsafe { GetCursorPos(&mut point) }.is_ok() && point.x == x && point.y == y {
+            Ok(())
+        } else {
+            Err(last_error.unwrap_or_else(|| "Windows 未能移动鼠标到目标位置".into()))
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
