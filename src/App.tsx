@@ -749,10 +749,14 @@ function ClickerPage() {
         if (!value) return;
 
         const loaded = normalizeProfile(value);
+        // Steps are a temporary run sequence, not persistent startup data.
+        // Keep the last coordinate and click parameters, but always start with
+        // an empty step list after the app is restarted.
+        let next = { ...loaded, targets: [] };
+        let needsSave = loaded.targets.length > 0;
         // 999999 was briefly used as the default before the current default
         // was settled at 3000. Migrate that old untouched value once, while
         // preserving a user's intentional choice of 999999 afterwards.
-        let next = loaded;
         if (
           value.repeatMode === "count" &&
           value.repeatCount === MAX_REPEAT_COUNT &&
@@ -762,12 +766,16 @@ function ClickerPage() {
             ...loaded,
             repeatCount: DEFAULT_PROFILE.repeatCount,
             repeatMode: "count",
+            targets: [],
           };
+          needsSave = true;
+        }
+        localStorage.setItem(SETTINGS_MIGRATION_KEY, "1");
+        if (needsSave) {
           void invoke("save_settings", { profile: next }).catch(
             () => undefined,
           );
         }
-        localStorage.setItem(SETTINGS_MIGRATION_KEY, "1");
         setProfile(next);
       })
       .catch(() => undefined);
