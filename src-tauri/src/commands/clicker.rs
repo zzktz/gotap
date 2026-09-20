@@ -198,6 +198,23 @@ fn resolve_click_point(
     }
 }
 
+fn move_mouse_to(enigo: &mut Enigo, x: i32, y: i32) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::SetCursorPos;
+
+        unsafe { SetCursorPos(x, y) }.map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        enigo
+            .move_mouse(x, y, Coordinate::Abs)
+            .map_err(|error| error.to_string())
+    }
+}
+
 fn point_inside_target(point: (i32, i32), target: (i32, i32, u32, u32)) -> bool {
     let (point_x, point_y) = point;
     let (center_x, center_y, width, height) = target;
@@ -334,10 +351,11 @@ pub fn start_clicking(
             }
             let target = targets[(completed as usize) % targets.len()];
             let (x, y) = resolve_click_point(target, &profile.click_position, &mut random_state);
-            if let Err(error) = enigo
-                .move_mouse(x, y, Coordinate::Abs)
-                .and_then(|_| enigo.button(button, Direction::Press))
-            {
+            if let Err(error) = move_mouse_to(&mut enigo, x, y).and_then(|_| {
+                enigo
+                    .button(button, Direction::Press)
+                    .map_err(|e| e.to_string())
+            }) {
                 if let Ok(mut status) = runtime.status.lock() {
                     status.state = "error".into();
                     status.error = Some(error.to_string());
@@ -445,9 +463,14 @@ pub async fn open_selection_window(app: AppHandle) -> Result<(), String> {
         let position = monitor.position();
         let size = monitor.size();
         let url = format!(
-            "index.html?selection=1&offsetX={}&offsetY={}",
+            "index.html?selection=1&offsetX={}&offsetY={}&coordinateScale={}",
             position.x as f64 / scale,
-            position.y as f64 / scale
+            position.y as f64 / scale,
+            if cfg!(target_os = "windows") {
+                scale
+            } else {
+                1.0
+            }
         );
         tauri::WebviewWindowBuilder::new(
             &app,

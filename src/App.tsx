@@ -210,6 +210,7 @@ function SelectionOverlay() {
   const params = new URLSearchParams(window.location.search);
   const offsetX = Number(params.get("offsetX") ?? 0);
   const offsetY = Number(params.get("offsetY") ?? 0);
+  const coordinateScale = Number(params.get("coordinateScale") ?? 1);
   const close = async () => {
     await invoke("close_selection_windows").catch(() => undefined);
     await getCurrentWindow()
@@ -225,10 +226,14 @@ function SelectionOverlay() {
     confirming.current = true;
     try {
       await emit("selection:completed", {
-        x: Math.round(offsetX + selection.left + selection.width / 2),
-        y: Math.round(offsetY + selection.top + selection.height / 2),
-        width: Math.round(selection.width),
-        height: Math.round(selection.height),
+        x: Math.round(
+          (offsetX + selection.left + selection.width / 2) * coordinateScale,
+        ),
+        y: Math.round(
+          (offsetY + selection.top + selection.height / 2) * coordinateScale,
+        ),
+        width: Math.round(selection.width * coordinateScale),
+        height: Math.round(selection.height * coordinateScale),
       } satisfies SelectionPayload);
       await close();
     } catch {
