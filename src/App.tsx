@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { exit, relaunch } from "@tauri-apps/plugin-process";
 import {
   check,
@@ -580,6 +580,8 @@ function ClickerPage() {
     targetCount: null,
     error: null,
   });
+  const appShellRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLElement>(null);
   const [message, setMessage] = useState("");
   const [startCountdown, setStartCountdown] = useState(0);
   const startPending = useRef(false);
@@ -628,6 +630,46 @@ function ClickerPage() {
   });
   const runStartedAt = useRef<number | null>(null);
   const previousState = useRef<ClickerStatus["state"]>("idle");
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    const resizeToContent = async () => {
+      const shell = appShellRef.current;
+      const content = contentRef.current;
+      if (!shell || !content) return;
+      try {
+        const [innerSize, scaleFactor] = await Promise.all([
+          appWindow.innerSize(),
+          appWindow.scaleFactor(),
+        ]);
+        const currentSize = innerSize.toLogical(scaleFactor);
+        const contentBottom = Math.ceil(content.getBoundingClientRect().bottom);
+        const contentHeight = Math.max(
+          shell.scrollHeight,
+          content.scrollHeight,
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight,
+          contentBottom,
+        );
+        const targetHeight = Math.max(590, contentHeight);
+        if (Math.abs(currentSize.height - targetHeight) < 2) return;
+        await appWindow.setSize(
+          new LogicalSize(currentSize.width, targetHeight),
+        );
+      } catch {
+        // The renderer is also used by Vite outside Tauri during development.
+      }
+    };
+    const observer = new ResizeObserver(() => void resizeToContent());
+    if (appShellRef.current) observer.observe(appShellRef.current);
+    if (contentRef.current) observer.observe(contentRef.current);
+    void resizeToContent();
+    const delayedResize = window.setTimeout(() => void resizeToContent(), 250);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(delayedResize);
+    };
+  }, []);
 
   const persistProfiles = (profiles: SavedProfile[]) => {
     setSavedProfiles(profiles);
@@ -984,7 +1026,8 @@ function ClickerPage() {
     return undefined;
   }, [startCountdown]);
   const start = async () => {
-    if (startPending.current || runningRef.current || startCountdown > 0) return;
+    if (startPending.current || runningRef.current || startCountdown > 0)
+      return;
     startPending.current = true;
     const token = ++startToken.current;
     setMessage("");
@@ -1086,7 +1129,7 @@ function ClickerPage() {
     };
   }, []);
   return (
-    <main className="app-shell">
+    <main ref={appShellRef} className="app-shell">
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">
@@ -1125,7 +1168,9 @@ function ClickerPage() {
               title="帮助与反馈"
               variant="light"
             >
-              <span className="help-icon" aria-hidden="true">?</span>
+              <span className="help-icon" aria-hidden="true">
+                ?
+              </span>
             </Button>
             {aboutMenuOpen && (
               <div className="about-menu" role="menu">
@@ -1161,7 +1206,7 @@ function ClickerPage() {
           </div>
         </div>
       </header>
-      <section className="content">
+      <section ref={contentRef} className="content">
         <div className="card target-card">
           <div className="section-heading">
             <div>
@@ -1274,9 +1319,13 @@ function ClickerPage() {
               ) : message ? (
                 <p className="hint">{message}</p>
               ) : running ? (
-                <span className="run-info-state run-info-running">正在运行</span>
+                <span className="run-info-state run-info-running">
+                  正在运行
+                </span>
               ) : status.state === "completed" ? (
-                <span className="run-info-state run-info-completed">已完成</span>
+                <span className="run-info-state run-info-completed">
+                  已完成
+                </span>
               ) : (
                 <span className="run-info-placeholder">
                   运行状态和操作提示显示在这里

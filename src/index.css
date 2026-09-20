@@ -25,14 +25,17 @@ body,
   min-height: 100%;
   margin: 0;
 }
+html {
+  overflow: hidden;
+}
 html.selection-mode,
 html.selection-mode body,
 html.selection-mode #root {
   background: transparent;
 }
 body {
-  min-height: 100vh;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 button,
 input,
@@ -48,7 +51,7 @@ button:disabled {
   opacity: 0.55;
 }
 .app-shell {
-  min-height: 100vh;
+  min-height: 590px;
   background: #fff;
 }
 .topbar {
