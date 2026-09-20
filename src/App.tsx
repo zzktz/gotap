@@ -583,6 +583,8 @@ function ClickerPage() {
   const [message, setMessage] = useState("");
   const [startCountdown, setStartCountdown] = useState(0);
   const startPending = useRef(false);
+  const startToken = useRef(0);
+  const pendingStartProfile = useRef<ClickProfile | null>(null);
   const [infoPanel, setInfoPanel] = useState<InfoPanel>(null);
   const [aboutMenuOpen, setAboutMenuOpen] = useState(false);
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
@@ -939,33 +941,49 @@ function ClickerPage() {
     });
   const totalClicks = runLogs.reduce((sum, log) => sum + log.clicks, 0);
   useEffect(() => {
-    if (startCountdown <= 0) return undefined;
-    const timer = window.setInterval(
-      () => setStartCountdown((value) => Math.max(value - 1, 0)),
-      1000,
+    if (startCountdown > 0) {
+      const timer = window.setTimeout(
+        () => setStartCountdown((value) => Math.max(value - 1, 0)),
+        1000,
+      );
+      return () => window.clearTimeout(timer);
+    }
+
+    const profileToStart = pendingStartProfile.current;
+    if (!profileToStart || !startPending.current) return undefined;
+    pendingStartProfile.current = null;
+    const token = startToken.current;
+    void invoke("start_clicking", { profile: profileToStart }).catch(
+      (error) => {
+        if (token !== startToken.current) return;
+        startPending.current = false;
+        setMessage(formatErrorMessage(error));
+      },
     );
-    return () => window.clearInterval(timer);
+    return undefined;
   }, [startCountdown]);
   const start = async () => {
-    // HeroUI can deliver more than one press event for a very quick mouse
-    // interaction. Keep the start operation idempotent while the countdown
-    // and native clicker startup are in progress.
     if (startPending.current || runningRef.current || startCountdown > 0) return;
     startPending.current = true;
+    const token = ++startToken.current;
     setMessage("");
-    setStartCountdown(START_DELAY_SECONDS);
     const effectiveProfile = normalizeProfile(profile);
     setProfile(effectiveProfile);
     try {
       await invoke("save_settings", { profile: effectiveProfile });
-      await invoke("start_clicking", { profile: effectiveProfile });
+      if (!startPending.current || token !== startToken.current) return;
+      pendingStartProfile.current = effectiveProfile;
+      setStartCountdown(START_DELAY_SECONDS);
     } catch (error) {
+      if (token !== startToken.current) return;
       startPending.current = false;
       setStartCountdown(0);
       setMessage(formatErrorMessage(error));
     }
   };
   const stop = () => {
+    startToken.current += 1;
+    pendingStartProfile.current = null;
     startPending.current = false;
     setStartCountdown(0);
     void invoke("stop_clicking_command").catch((error) =>
@@ -1000,7 +1018,7 @@ function ClickerPage() {
       else unlisten();
     });
     void listen("hotkey:stop", () => {
-      if (runningRef.current) stopRef.current();
+      if (runningRef.current || startPending.current) stopRef.current();
     }).then((unlisten) => {
       if (active) disposeStop = unlisten;
       else unlisten();
@@ -1202,7 +1220,7 @@ function ClickerPage() {
                 className="hero-button primary-action-button"
                 color="primary"
                 isDisabled={running || startCountdown > 0}
-                onPress={() => void start()}
+                onClick={() => void start()}
               >
                 开始点击
               </Button>

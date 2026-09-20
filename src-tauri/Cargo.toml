@@ -1,6 +1,6 @@
 [package]
 name = "gotap"
-version = "0.1.13"
+version = "0.1.14"
 description = "GoTap desktop auto clicker"
 license = "MIT"
 repository = "https://github.com/zzktz/gotap"
@@ -32,6 +32,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61.3", features = ["Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.23.2"
 
 [profile.release]
 codegen-units = 1

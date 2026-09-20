@@ -16,7 +16,6 @@ pub const CLICKER_STATUS_EVENT: &str = "clicker:status";
 pub const CLICKER_PROGRESS_EVENT: &str = "clicker:progress";
 const MIN_INTERVAL_MS: u64 = 100;
 const FIXED_PRESS_DURATION_MS: u64 = 5;
-const START_DELAY_MS: u64 = 3_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -140,18 +139,6 @@ fn input_button(button: &ClickButton) -> Button {
     }
 }
 
-fn interruptible_delay(cancel: &AtomicBool, duration: Duration) -> bool {
-    let deadline = Instant::now() + duration;
-    while !cancel.load(Ordering::Relaxed) {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            return true;
-        }
-        thread::sleep(remaining.min(Duration::from_millis(5)));
-    }
-    false
-}
-
 fn random_seed() -> u64 {
     let seed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -245,6 +232,37 @@ fn move_mouse_to(enigo: &mut Enigo, x: i32, y: i32) -> Result<(), String> {
     }
 }
 
+fn cursor_position(_enigo: &Enigo) -> Result<(i32, i32), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::{Foundation::POINT, UI::WindowsAndMessaging::GetCursorPos};
+
+        let mut point = POINT { x: 0, y: 0 };
+        unsafe { GetCursorPos(&mut point) }
+            .map(|_| (point.x, point.y))
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use core_graphics::{
+            event::CGEvent,
+            event_source::{CGEventSource, CGEventSourceStateID},
+        };
+
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
+            .map_err(|_| "无法读取 macOS 鼠标位置".to_string())?;
+        let event = CGEvent::new(source).map_err(|_| "无法读取 macOS 鼠标位置".to_string())?;
+        let point = event.location();
+        Ok((point.x.round() as i32, point.y.round() as i32))
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        _enigo.location().map_err(|error| error.to_string())
+    }
+}
+
 fn point_inside_target(point: (i32, i32), target: (i32, i32, u32, u32)) -> bool {
     let (point_x, point_y) = point;
     let (center_x, center_y, width, height) = target;
@@ -274,7 +292,7 @@ fn interruptible_sleep_with_cursor_check(
 ) -> Result<CursorSleepResult, String> {
     let deadline = Instant::now() + duration;
     while !cancel.load(Ordering::Relaxed) {
-        let cursor = enigo.location().map_err(|error| error.to_string())?;
+        let cursor = cursor_position(enigo)?;
         if !point_inside_target(cursor, target) {
             return Ok(CursorSleepResult::LeftTarget);
         }
@@ -351,15 +369,6 @@ pub fn start_clicking(
                 return;
             }
         };
-        if !interruptible_delay(&cancel, Duration::from_millis(START_DELAY_MS)) {
-            if let Ok(mut status) = runtime.status.lock() {
-                if status.state == "running" {
-                    status.state = "stopped".into();
-                }
-            }
-            emit_status(&app, &runtime);
-            return;
-        }
         let button = input_button(&profile.button);
         let targets = if profile.targets.is_empty() {
             vec![(profile.x, profile.y, profile.width, profile.height)]
@@ -474,7 +483,7 @@ pub fn stop_clicking_command(runtime: State<'_, ClickerRuntime>) {
 #[tauri::command]
 pub fn get_cursor_position() -> Result<(i32, i32), String> {
     let enigo = Enigo::new(&Settings::default()).map_err(|error| error.to_string())?;
-    enigo.location().map_err(|error| error.to_string())
+    cursor_position(&enigo)
 }
 
 #[tauri::command]
