@@ -79,6 +79,7 @@ const MIN_INTERVAL_MS = 100;
 const MAX_REPEAT_COUNT = 999_999;
 const FIXED_PRESS_DURATION_MS = 5;
 const START_DELAY_SECONDS = 3;
+const INITIAL_UPDATE_CHECK_DELAY_MS = 20_000;
 interface ClickerStatus {
   state: "idle" | "running" | "stopped" | "completed" | "error";
   completed: number;
@@ -810,14 +811,26 @@ function ClickerPage() {
   }, []);
 
   useEffect(() => {
-    void checkForUpdates(false);
+    // Let the freshly restarted window become interactive before contacting
+    // the update service. The production proxy can take several seconds to
+    // respond, and doing this immediately after a Windows installer restart
+    // made the new window appear unresponsive.
+    let startupReady = false;
+    const initialCheck = window.setTimeout(() => {
+      startupReady = true;
+      void checkForUpdates(false);
+    }, INITIAL_UPDATE_CHECK_DELAY_MS);
     const interval = window.setInterval(
       () => void checkForUpdates(false),
       5 * 60_000,
     );
-    const onFocus = () => void checkForUpdates(false);
+    const onFocus = () => {
+      if (startupReady && document.visibilityState === "visible")
+        void checkForUpdates(false);
+    };
     window.addEventListener("focus", onFocus);
     return () => {
+      window.clearTimeout(initialCheck);
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };

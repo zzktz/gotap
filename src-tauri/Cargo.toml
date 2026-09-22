@@ -1,6 +1,6 @@
 [package]
 name = "gotap"
-version = "0.1.17"
+version = "0.1.18"
 description = "GoTap desktop auto clicker"
 license = "MIT"
 repository = "https://github.com/zzktz/gotap"
