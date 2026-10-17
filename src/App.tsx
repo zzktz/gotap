@@ -435,6 +435,31 @@ function AuthPage({
   };
   return (
     <main className="auth-shell">
+      <aside className="auth-visual">
+        <div className="auth-visual-brand">
+          <div className="brand-mark auth-brand-mark"><CursorLogo /></div>
+          <strong>GoTap</strong>
+        </div>
+        <div className="auth-art" aria-hidden="true">
+          <div className="art-orbit art-orbit-one" />
+          <div className="art-orbit art-orbit-two" />
+          <div className="art-window">
+            <div className="art-window-bar"><i /><i /><i /></div>
+            <div className="art-window-line art-window-line-one" />
+            <div className="art-window-line art-window-line-two" />
+            <div className="art-window-target"><span /></div>
+            <div className="art-cursor"><CursorLogo /></div>
+          </div>
+          <span className="art-spark art-spark-one">✦</span>
+          <span className="art-spark art-spark-two">✧</span>
+        </div>
+        <div className="auth-visual-copy">
+          <p className="eyebrow">轻松开始</p>
+          <h2>把重复操作，<br />交给 GoTap。</h2>
+          <p>简单、可靠的桌面工具，让日常工作更从容。</p>
+        </div>
+        <span className="auth-visual-footer">专注当下 · 高效每一步</span>
+      </aside>
       <section className="auth-panel">
         <div className="auth-brand">
           <div className="brand-mark auth-brand-mark">
@@ -570,7 +595,7 @@ function AuthPage({
             )}
           </div>
         </section>
-        <p className="auth-copyright">GoTap · 桌面自动点击器</p>
+        <p className="auth-copyright">GoTap · 桌面工作空间</p>
       </section>
     </main>
   );
