@@ -364,7 +364,6 @@ function AuthPage({
 }) {
   const remembered = useMemo(() => getRememberedLogin(), []);
   const [mode, setMode] = useState<Mode>("login");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState(remembered?.email ?? "");
   const [password, setPassword] = useState(remembered?.password ?? "");
   const [code, setCode] = useState("");
@@ -417,7 +416,7 @@ function AuthPage({
       let session: AuthSession | undefined;
       if (mode === "login") session = await login(email, password);
       else if (mode === "register")
-        session = await register(name, email, code, password);
+        session = await register("", email, code, password);
       else {
         await resetPassword(email, code, password);
         setMode("login");
@@ -434,11 +433,12 @@ function AuthPage({
     }
   };
   return (
-    <main className="auth-shell">
+    <main className={`auth-shell${mode === "login" ? "" : " auth-shell-expanded"}`}>
       <aside className="auth-visual">
         <div className="auth-visual-brand">
           <div className="brand-mark auth-brand-mark"><CursorLogo /></div>
           <strong>GoTap</strong>
+          <span className="auth-version-badge">v{appPackage.version}</span>
         </div>
         <div className="auth-art" aria-hidden="true">
           <div className="art-orbit art-orbit-one" />
@@ -477,19 +477,6 @@ function AuthPage({
                 : "重置密码"}
           </h2>
           <form onSubmit={(event) => void submit(event)} className="form">
-            {mode === "register" && (
-              <Input
-                className="hero-input"
-                label="姓名"
-                labelPlacement="outside"
-                maxLength={10}
-                onValueChange={setName}
-                placeholder="可选"
-                size="sm"
-                value={name}
-                variant="bordered"
-              />
-            )}
             <Input
               className="hero-input"
               isReadOnly={mode === "forgot"}
