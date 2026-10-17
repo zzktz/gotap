@@ -237,7 +237,8 @@ button:disabled {
   background: #f7fafe;
 }
 .clicker-shell .module-account-email { color: #738396; font-size: 12px; }
-.module-return-row { display: flex; justify-content: flex-end; margin-bottom: -8px; }
+.module-return-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: -8px; }
+.module-return-title { color: #243b53; font-size: 14px; font-weight: 700; }
 .module-back-button { color: #657b90; }
 .module-back-button:hover { color: #1768a7; background: #eaf3f9; }
 html[data-theme="dark"] .module-shell {
@@ -283,6 +284,7 @@ html[data-theme="dark"] .clicker-shell .brand small,
 html[data-theme="dark"] .clicker-shell .module-account-email { color: #aebbd0; }
 html[data-theme="dark"] .clicker-shell .module-back-button { color: #c2cede; }
 html[data-theme="dark"] .clicker-shell .module-back-button[data-hover="true"] { color: #fff; background: #243f5f; }
+html[data-theme="dark"] .clicker-shell .module-return-title { color: #edf2f8; }
 html[data-theme="dark"] .clicker-shell .module-account-avatar { border-color: #405b79; color: #c3def5; background: #243f5f; }
 html[data-theme="dark"] .clicker-shell .topbar-actions .hero-button,
 html[data-theme="dark"] .clicker-shell .topbar-action { color: #c2cede; }

@@ -782,12 +782,14 @@ function AuthPage({
 
 function ClickerPage({
   session,
+  moduleName,
   isDark,
   onToggleTheme,
   onLogout,
   onBack,
 }: {
   session: AuthSession;
+  moduleName: string;
   isDark: boolean;
   onToggleTheme: () => void;
   onLogout: () => void;
@@ -1461,6 +1463,7 @@ function ClickerPage({
       </header>
       <section ref={contentRef} className="content">
         <div className="module-return-row">
+          <strong className="module-return-title">{moduleName}</strong>
           <Button className="hero-button module-back-button" size="sm" variant="light" onPress={onBack}>
             ← 模块列表
           </Button>
@@ -2330,6 +2333,7 @@ function AuthenticatedApp() {
     activeModule.module_key === "clicker" ? (
       <ClickerPage
         session={session}
+        moduleName={activeModule.name}
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onLogout={() => {
