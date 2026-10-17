@@ -1496,6 +1496,8 @@ html[data-theme="dark"] .auth-card .hero-input [data-slot="input"] { color: #e7e
 html[data-theme="dark"] .auth-card .hero-input [data-slot="input"]::placeholder { color: #8294aa; }
 html[data-theme="dark"] .remember-checkbox,
 html[data-theme="dark"] .auth-links button { color: #a7f5bc; }
+html[data-theme="dark"] .auth-card .remember-checkbox,
+html[data-theme="dark"] .auth-card .remember-checkbox [data-slot="label"] { color: #e5ebf4 !important; }
 html[data-theme="dark"] .auth-links button:hover { color: #d0ffda; }
 html[data-theme="dark"] .auth-card .code-button { border-color: #49617f; color: #a7f5bc; background: #20543a; }
 html[data-theme="dark"] .theme-toggle { border-color: #49617f; color: #d8e2ef; background: #243957; }
