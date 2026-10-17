@@ -21,7 +21,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const collapsed = ref(false);
 const settingsOpen = ref(false);
-const buildVersion = import.meta.env.VITE_ADMIN_VERSION || "0.1.1";
+const buildVersion = import.meta.env.VITE_ADMIN_VERSION || "0.1.2";
 const currentVersion = ref(buildVersion);
 const latestVersion = ref(buildVersion);
 const updateAvailable = computed(
@@ -143,14 +143,14 @@ onBeforeUnmount(() => {
         </div>
         <div class="header-actions">
           <a-badge :dot="updateAvailable" class="version-badge">
-            <a-button
-              class="header-icon admin-version"
-              type="text"
+            <a-tag
+              color="blue"
+              class="admin-version"
               aria-label="检查管理后台更新"
               @click="refreshForUpdate"
             >
               v{{ currentVersion }}
-            </a-button>
+            </a-tag>
           </a-badge>
           <a-tooltip title="界面设置"
             ><a-button
