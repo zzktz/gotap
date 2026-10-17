@@ -457,7 +457,6 @@ function AuthPage({
           <p className="eyebrow">轻松开始</p>
           <p>简单、可靠的桌面工具，让日常工作更从容。</p>
         </div>
-        <span className="auth-visual-footer">专注当下 · 高效每一步</span>
       </aside>
       <section className="auth-panel">
         <section className="card auth-card">
