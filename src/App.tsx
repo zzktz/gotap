@@ -1400,9 +1400,6 @@ function ClickerPage({
           <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
           <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
           <span className="module-account-email">{session.user.email}</span>
-          <Button className="hero-button" size="sm" variant="light" onPress={onBack}>
-            模块列表
-          </Button>
           <div className="about-menu-wrap" ref={aboutMenuRef}>
             <Button
               aria-label="打开帮助与反馈菜单"
@@ -1463,6 +1460,11 @@ function ClickerPage({
         </div>
       </header>
       <section ref={contentRef} className="content">
+        <div className="module-return-row">
+          <Button className="hero-button module-back-button" size="sm" variant="light" onPress={onBack}>
+            ← 模块列表
+          </Button>
+        </div>
         <div className="card target-card">
           <div className="section-heading">
             <div>

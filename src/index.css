@@ -237,6 +237,9 @@ button:disabled {
   background: #f7fafe;
 }
 .clicker-shell .module-account-email { color: #738396; font-size: 12px; }
+.module-return-row { display: flex; justify-content: flex-end; margin-bottom: -8px; }
+.module-back-button { color: #657b90; }
+.module-back-button:hover { color: #1768a7; background: #eaf3f9; }
 html[data-theme="dark"] .module-shell {
   color: #e7edf6;
   background: radial-gradient(ellipse at 83% 0%, #1b3553 0, transparent 38%), linear-gradient(180deg, #142842 0%, #172b44 100%);
@@ -278,6 +281,8 @@ html[data-theme="dark"] .clicker-shell .module-topbar { border-color: #304762; b
 html[data-theme="dark"] .clicker-shell .brand strong { color: #edf2f8; }
 html[data-theme="dark"] .clicker-shell .brand small,
 html[data-theme="dark"] .clicker-shell .module-account-email { color: #aebbd0; }
+html[data-theme="dark"] .clicker-shell .module-back-button { color: #c2cede; }
+html[data-theme="dark"] .clicker-shell .module-back-button[data-hover="true"] { color: #fff; background: #243f5f; }
 html[data-theme="dark"] .clicker-shell .module-account-avatar { border-color: #405b79; color: #c3def5; background: #243f5f; }
 html[data-theme="dark"] .clicker-shell .topbar-actions .hero-button,
 html[data-theme="dark"] .clicker-shell .topbar-action { color: #c2cede; }
