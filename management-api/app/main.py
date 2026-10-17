@@ -12,6 +12,8 @@ import shutil
 import sqlite3
 import urllib.error
 import urllib.request
+import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage
 from datetime import date as calendar_date
 from datetime import datetime, timedelta, timezone
@@ -40,6 +42,9 @@ from .config import (
     DB_BACKUP_RETENTION_DAYS,
     DB_BUSY_TIMEOUT_MS,
     DB_PATH,
+    DOCUMENT_CONVERSION_MAX_FILE_BYTES,
+    DOCUMENT_CONVERSION_RETENTION_DAYS,
+    DOCUMENT_CONVERSION_STORAGE_DIR,
     DEFAULT_ACCOUNT_VALID_DAYS,
     DEFAULT_ACCOUNT_VALID_DAYS_SETTING_KEY,
     DEFAULT_DAILY_QUOTA_BYTES,
@@ -108,10 +113,12 @@ from .schemas import (
     SendVerificationCodeRequest,
     UsageReportRequest,
 )
+from .document_conversion import ALLOWED_FORMATS, convert_document
 
 password_hasher = PasswordHasher()
 bearer = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
+document_conversion_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="document-conversion")
 
 # Use the dedicated GitHub proxy when configured.  A custom opener keeps
 # these requests isolated from unrelated process-wide proxy settings.
@@ -758,6 +765,23 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS document_conversion_jobs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                source_name TEXT NOT NULL,
+                source_format TEXT NOT NULL,
+                target_format TEXT NOT NULL,
+                input_path TEXT NOT NULL,
+                output_path TEXT,
+                input_size INTEGER NOT NULL,
+                output_size INTEGER,
+                status TEXT NOT NULL,
+                error_message TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                expires_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS relay_health (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 relay_id TEXT NOT NULL UNIQUE REFERENCES relays(id) ON DELETE CASCADE,
@@ -774,6 +798,8 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_app_releases_status ON app_releases(status, published_at);
             CREATE INDEX IF NOT EXISTS idx_feedback_user_created ON feedback(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_feedback_status_created ON feedback(status, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_conversion_user_created ON document_conversion_jobs(user_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_conversion_status_created ON document_conversion_jobs(status, created_at);
             """
         )
         # Existing deployments created feedback.user_id as NOT NULL while
@@ -875,6 +901,13 @@ def init_db() -> None:
             """INSERT OR IGNORE INTO feature_modules(
                    module_key, name, description, icon, enabled, sort_order, created_at, updated_at
                ) VALUES ('clicker', '自动点击器', '桌面自动点击功能', 'ThunderboltOutlined', 1, 10, ?, ?)""",
+            (module_created_at, module_created_at),
+        )
+        # Conversion module is available only after an administrator enables it.
+        connection.execute(
+            """INSERT OR IGNORE INTO feature_modules(
+                   module_key, name, description, icon, enabled, sort_order, created_at, updated_at
+               ) VALUES ('document_converter', '文档格式互转', 'DOC、DOCX、PPT、PPTX 与 PDF 格式转换', 'FileTextOutlined', 0, 20, ?, ?)""",
             (module_created_at, module_created_at),
         )
         connection.execute(
@@ -1171,6 +1204,11 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=Fals
 @app.on_event("startup")
 def startup() -> None:
     init_db()
+    with db() as connection:
+        connection.execute(
+            "UPDATE document_conversion_jobs SET status = 'failed', error_message = '服务重启导致任务中断', finished_at = ? WHERE status IN ('queued', 'running')",
+            (iso(now()),),
+        )
     maintenance.start()
 
 
@@ -1671,6 +1709,178 @@ def user_feedback(user: Annotated[sqlite3.Row, Depends(current_user)]) -> dict:
             (user["id"],),
         ).fetchall()
         return {"items": [_feedback_payload(row, _feedback_attachments(connection, row["id"])) for row in rows]}
+
+
+def _conversion_payload(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "id": row["id"],
+        "source_name": row["source_name"],
+        "source_format": row["source_format"],
+        "target_format": row["target_format"],
+        "input_size": row["input_size"],
+        "output_size": row["output_size"],
+        "status": row["status"],
+        "error_message": row["error_message"],
+        "created_at": row["created_at"],
+        "started_at": row["started_at"],
+        "finished_at": row["finished_at"],
+        "expires_at": row["expires_at"],
+    }
+
+
+def _document_signature_is_valid(path: Path, extension: str) -> bool:
+    with path.open("rb") as source:
+        signature = source.read(8)
+    if extension == "pdf":
+        return signature.startswith(b"%PDF-")
+    if extension in {"doc", "ppt"}:
+        return signature.startswith(bytes.fromhex("D0CF11E0A1B11AE1"))
+    if not signature.startswith(b"PK\x03\x04"):
+        return False
+    try:
+        with zipfile.ZipFile(path) as archive:
+            entries = archive.infolist()
+            total_uncompressed_size = sum(entry.file_size for entry in entries)
+            names = {entry.filename for entry in entries}
+            expected_entry = "word/document.xml" if extension == "docx" else "ppt/presentation.xml"
+            return (
+                len(entries) <= 5000
+                and total_uncompressed_size <= 256 * 1024 * 1024
+                and expected_entry in names
+            )
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def _run_document_conversion(job_id: str, input_path: Path, target_format: str) -> None:
+    output_dir = input_path.parent / "output"
+    started_at = iso(now())
+    with db() as connection:
+        connection.execute(
+            "UPDATE document_conversion_jobs SET status = 'running', started_at = ? WHERE id = ? AND status = 'queued'",
+            (started_at, job_id),
+        )
+    try:
+        output_path = convert_document(input_path, target_format, output_dir)
+        output_size = output_path.stat().st_size
+        with db() as connection:
+            connection.execute(
+                "UPDATE document_conversion_jobs SET status = 'succeeded', output_path = ?, output_size = ?, finished_at = ? WHERE id = ?",
+                (str(output_path), output_size, iso(now()), job_id),
+            )
+    except Exception as error:
+        logger.exception("文档转换失败，任务 %s", job_id)
+        message = str(error) if isinstance(error, (TimeoutError, ValueError)) else "转换失败，请检查文件内容或稍后重试"
+        with db() as connection:
+            connection.execute(
+                "UPDATE document_conversion_jobs SET status = 'failed', error_message = ?, finished_at = ? WHERE id = ?",
+                (message[:300], iso(now()), job_id),
+            )
+
+
+@app.post("/v1/conversions", status_code=status.HTTP_202_ACCEPTED)
+async def create_document_conversion(
+    file: Annotated[UploadFile, File(...)],
+    target_format: Annotated[str, Header(alias="X-Target-Format")],
+    user: Annotated[sqlite3.Row, Depends(current_user)],
+) -> dict[str, object]:
+    source_name = Path(file.filename or "").name[:255]
+    source_format = Path(source_name).suffix.lower().lstrip(".")
+    target_format = target_format.lower().strip().lstrip(".")
+    if source_format not in ALLOWED_FORMATS or target_format not in ALLOWED_FORMATS:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="仅支持 DOC、DOCX、PPT、PPTX 和 PDF")
+    if source_format == target_format or (source_format != "pdf" and target_format != "pdf"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请选择 Office 文档与 PDF 之间的转换方向")
+    job_id = secrets.token_hex(16)
+    job_dir = DOCUMENT_CONVERSION_STORAGE_DIR.resolve() / str(user["id"]) / job_id
+    input_path = job_dir / f"input.{source_format}"
+    job_dir.mkdir(parents=True, exist_ok=False)
+    total = 0
+    try:
+        with input_path.open("wb") as output:
+            while chunk := await file.read(1024 * 1024):
+                total += len(chunk)
+                if total > DOCUMENT_CONVERSION_MAX_FILE_BYTES:
+                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="文件超过 50 MB 限制")
+                output.write(chunk)
+        if not total or not _document_signature_is_valid(input_path, source_format):
+            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="文件内容与扩展名不匹配或文件为空")
+        created_at = iso(now())
+        expires_at = iso(now() + timedelta(days=DOCUMENT_CONVERSION_RETENTION_DAYS))
+        with db() as connection:
+            active_count = connection.execute(
+                "SELECT COUNT(*) FROM document_conversion_jobs WHERE user_id = ? AND status IN ('queued', 'running')",
+                (user["id"],),
+            ).fetchone()[0]
+            if active_count >= 3:
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="最多同时排队或转换 3 个任务")
+            global_active_count = connection.execute(
+                "SELECT COUNT(*) FROM document_conversion_jobs WHERE status IN ('queued', 'running')"
+            ).fetchone()[0]
+            if global_active_count >= 10:
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="转换队列繁忙，请稍后再试")
+            connection.execute(
+                """INSERT INTO document_conversion_jobs(
+                       id, user_id, source_name, source_format, target_format, input_path,
+                       input_size, status, created_at, expires_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)""",
+                (job_id, user["id"], source_name, source_format, target_format, str(input_path), total, created_at, expires_at),
+            )
+        document_conversion_executor.submit(_run_document_conversion, job_id, input_path, target_format)
+        with db() as connection:
+            row = connection.execute("SELECT * FROM document_conversion_jobs WHERE id = ?", (job_id,)).fetchone()
+        return _conversion_payload(row)
+    except Exception:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
+    finally:
+        await file.close()
+
+
+@app.get("/v1/conversions")
+def list_document_conversions(
+    user: Annotated[sqlite3.Row, Depends(current_user)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, object]:
+    with db() as connection:
+        rows = connection.execute(
+            "SELECT * FROM document_conversion_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (user["id"], limit, offset),
+        ).fetchall()
+        count = connection.execute("SELECT COUNT(*) FROM document_conversion_jobs WHERE user_id = ?", (user["id"],)).fetchone()[0]
+    return {"items": [_conversion_payload(row) for row in rows], "total": count}
+
+
+@app.get("/v1/conversions/{job_id}")
+def get_document_conversion(job_id: str, user: Annotated[sqlite3.Row, Depends(current_user)]) -> dict[str, object]:
+    with db() as connection:
+        row = connection.execute(
+            "SELECT * FROM document_conversion_jobs WHERE id = ? AND user_id = ?",
+            (job_id, user["id"]),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="转换记录不存在")
+    return _conversion_payload(row)
+
+
+@app.get("/v1/conversions/{job_id}/download")
+def download_document_conversion(job_id: str, user: Annotated[sqlite3.Row, Depends(current_user)]) -> FileResponse:
+    with db() as connection:
+        row = connection.execute(
+            "SELECT * FROM document_conversion_jobs WHERE id = ? AND user_id = ?",
+            (job_id, user["id"]),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="转换记录不存在")
+    if row["status"] != "succeeded" or not row["output_path"]:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="转换尚未完成")
+    root = DOCUMENT_CONVERSION_STORAGE_DIR.resolve()
+    output_path = Path(row["output_path"]).resolve()
+    if not output_path.is_relative_to(root) or not output_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="转换结果已过期")
+    download_name = f"{Path(row['source_name']).stem}.{row['target_format']}"
+    return FileResponse(output_path, filename=download_name)
 
 
 @app.post("/v1/feedback", status_code=status.HTTP_201_CREATED)

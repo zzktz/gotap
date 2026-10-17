@@ -71,7 +71,7 @@ export function formatErrorMessage(error: unknown): string {
     .trim();
 }
 
-async function request<T>(path: string, init: RequestInit): Promise<T> {
+export async function authenticatedRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const body = init.body ? JSON.parse(String(init.body)) : undefined;
   try {
@@ -86,6 +86,8 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     throw new Error(formatErrorMessage(error));
   }
 }
+
+const request = authenticatedRequest;
 
 function saveSession(response: AuthResponse): AuthSession {
   const session: AuthSession = {

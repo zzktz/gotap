@@ -115,6 +115,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::control_request,
+            commands::upload_document_conversion,
+            commands::download_document_conversion,
             commands::get_clicker_status,
             commands::start_clicking,
             commands::stop_clicking_command,

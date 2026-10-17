@@ -20,6 +20,7 @@ import appPackage from "../package.json";
 import {
   clearRememberedLogin,
   clearSession,
+  authenticatedRequest,
   formatErrorMessage,
   getAuthSettings,
   getFeatureModules,
@@ -1999,6 +2000,170 @@ function ClickerPage({
   );
 }
 
+interface DocumentConversionJob {
+  id: string;
+  source_name: string;
+  source_format: string;
+  target_format: string;
+  input_size: number;
+  output_size: number | null;
+  status: "queued" | "running" | "succeeded" | "failed" | "expired";
+  error_message: string | null;
+  created_at: string;
+}
+
+function DocumentConverterPage({
+  session,
+  isDark,
+  onToggleTheme,
+  onBack,
+}: {
+  session: AuthSession;
+  isDark: boolean;
+  onToggleTheme: () => void;
+  onBack: () => void;
+}) {
+  const [jobs, setJobs] = useState<DocumentConversionJob[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [targetFormat, setTargetFormat] = useState("pdf");
+  const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadJobs = async () => {
+    try {
+      const result = await authenticatedRequest<{ items: DocumentConversionJob[] }>("/v1/conversions");
+      setJobs(result.items);
+    } catch (loadError) {
+      setError(formatErrorMessage(loadError));
+    }
+  };
+  useEffect(() => { void loadJobs(); }, []);
+  useEffect(() => {
+    if (!jobs.some((job) => job.status === "queued" || job.status === "running")) return undefined;
+    const timer = window.setInterval(() => void loadJobs(), 1800);
+    return () => window.clearInterval(timer);
+  }, [jobs]);
+
+  const acceptFile = (candidate?: File) => {
+    if (!candidate) return;
+    const extension = candidate.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!["doc", "docx", "ppt", "pptx", "pdf"].includes(extension)) {
+      setError("仅支持 DOC、DOCX、PPT、PPTX 和 PDF 文件");
+      return;
+    }
+    if (candidate.size > 50 * 1024 * 1024) {
+      setError("文件不能超过 50 MB");
+      return;
+    }
+    setError("");
+    setFile(candidate);
+    setTargetFormat(extension === "pdf" ? "docx" : "pdf");
+  };
+  const startConversion = async () => {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      const job = await invoke<DocumentConversionJob>("upload_document_conversion", {
+        filename: file.name,
+        targetFormat,
+        bytes,
+        accessToken: session.token,
+      });
+      setJobs((current) => [job, ...current]);
+      setFile(null);
+      await loadJobs();
+    } catch (uploadError) {
+      setError(formatErrorMessage(uploadError));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const downloadResult = async (job: DocumentConversionJob) => {
+    try {
+      const result = await invoke<{ filename: string; contentType: string; bytes: number[] }>(
+        "download_document_conversion",
+        { jobId: job.id, accessToken: session.token },
+      );
+      const blob = new Blob([new Uint8Array(result.bytes)], { type: result.contentType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      setError(formatErrorMessage(downloadError));
+    }
+  };
+  const statusLabel: Record<DocumentConversionJob["status"], string> = {
+    queued: "排队中", running: "转换中", succeeded: "已完成", failed: "失败", expired: "已过期",
+  };
+  const formatSize = (size: number) => size < 1024 * 1024 ? `${Math.max(1, Math.round(size / 1024))} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`;
+
+  return (
+    <main className="app-shell module-shell">
+      <AppHeader accountEmail={session.user.email} subtitle="文档格式互转" versionBadge={<HomeVersionBadge />}>
+        <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
+      </AppHeader>
+      <section className="document-converter module-home">
+        <div className="module-return-row">
+          <strong className="module-return-title">文档格式互转</strong>
+          <Button className="hero-button module-back-button" size="sm" variant="light" onPress={onBack}>← 模块列表</Button>
+        </div>
+        <div
+          className={`document-dropzone${dragging ? " is-dragging" : ""}`}
+          onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
+          onDrop={(event) => { event.preventDefault(); setDragging(false); acceptFile(event.dataTransfer.files[0]); }}
+        >
+          <span className="document-drop-icon" aria-hidden="true">⇧</span>
+          <strong>{file ? file.name : "拖放文档到这里"}</strong>
+          <span>{file ? formatSize(file.size) : "或选择文件，支持 DOC、DOCX、PPT、PPTX、PDF，最大 50 MB"}</span>
+          <label className="hero-button document-choose-button">
+            选择文件
+            <input accept=".doc,.docx,.ppt,.pptx,.pdf" type="file" onChange={(event) => acceptFile(event.target.files?.[0])} />
+          </label>
+        </div>
+        <div className="document-convert-actions">
+          <label htmlFor="document-target-format">转换为</label>
+          <Select
+            id="document-target-format"
+            aria-label="目标格式"
+            className="hero-select document-format-select"
+            selectedKeys={[targetFormat]}
+            onChange={(event) => setTargetFormat(event.target.value)}
+            size="sm"
+          >
+            {(file?.name.toLowerCase().endsWith(".pdf") ? ["docx", "doc", "pptx", "ppt"] : ["pdf"]).map((format) => <SelectItem key={format}>{format.toUpperCase()}</SelectItem>)}
+          </Select>
+          <Button className="hero-button primary-action-button" color="primary" isDisabled={!file || busy} isLoading={busy} onPress={() => void startConversion()}>
+            开始转换
+          </Button>
+        </div>
+        <p className="document-quality-note">PDF 转 Word 或 PowerPoint 时，原文档布局可能无法完整还原，转换结果建议人工校对；扫描版 PDF 可能需要 OCR。</p>
+        {error && <p className="error document-error" role="alert">{error}</p>}
+        <div className="document-history-heading"><h2>转换记录</h2><Button className="hero-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
+        {jobs.length ? (
+          <div className="document-job-list">
+            {jobs.map((job) => (
+              <article className="document-job" key={job.id}>
+                <div className="document-job-file"><strong>{job.source_name}</strong><span>{job.source_format.toUpperCase()} → {job.target_format.toUpperCase()} · {formatSize(job.input_size)} · {new Date(job.created_at).toLocaleString()}</span></div>
+                <span className={`document-job-status status-${job.status}`}>{statusLabel[job.status]}</span>
+                {job.status === "succeeded" ? <Button className="hero-button" size="sm" onPress={() => void downloadResult(job)}>下载</Button> : null}
+                {job.status === "failed" && <span className="document-job-error">{job.error_message || "转换失败"}</span>}
+              </article>
+            ))}
+          </div>
+        ) : <div className="document-empty">还没有转换记录。</div>}
+      </section>
+    </main>
+  );
+}
+
 function ModuleHome({
   session,
   modules,
@@ -2299,6 +2464,13 @@ function AuthenticatedApp() {
           void logout();
           setSession(null);
         }}
+        onBack={returnToModuleHome}
+      />
+    ) : activeModule.module_key === "document_converter" ? (
+      <DocumentConverterPage
+        session={session}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
         onBack={returnToModuleHome}
       />
     ) : (

@@ -774,3 +774,131 @@ pub async fn control_request(
             .unwrap_or_else(|| "未知网络错误".into())
     ))
 }
+
+#[derive(serde::Serialize)]
+pub struct ConversionDownload {
+    pub filename: String,
+    pub content_type: String,
+    pub bytes: Vec<u8>,
+}
+
+#[tauri::command]
+pub async fn upload_document_conversion(
+    filename: String,
+    target_format: String,
+    bytes: Vec<u8>,
+    access_token: String,
+) -> Result<serde_json::Value, String> {
+    const API_BASE_URLS: [&str; 2] = ["https://gotap.123371.com", "https://gotop.123371.com"];
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(150))
+        .build()
+        .map_err(|error| format!("无法创建服务器请求：{error}"))?;
+    let mut last_error = None;
+    for base_url in API_BASE_URLS {
+        let part = reqwest::multipart::Part::bytes(bytes.clone()).file_name(filename.clone());
+        let form = reqwest::multipart::Form::new().part("file", part);
+        let response = match client
+            .post(format!("{base_url}/v1/conversions"))
+            .bearer_auth(&access_token)
+            .header("X-Target-Format", &target_format)
+            .multipart(form)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                last_error = Some(error);
+                continue;
+            }
+        };
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .map_err(|error| format!("读取服务器响应失败：{error}"))?;
+        let value: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|_| "服务器返回数据无效".to_owned())?;
+        if !status.is_success() {
+            let detail = value
+                .get("detail")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("文件上传失败");
+            return Err(detail.to_owned());
+        }
+        return Ok(value);
+    }
+    Err(format!(
+        "无法连接服务器，请检查网络或稍后重试：{}",
+        last_error
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "未知错误".into())
+    ))
+}
+
+#[tauri::command]
+pub async fn download_document_conversion(
+    job_id: String,
+    access_token: String,
+) -> Result<ConversionDownload, String> {
+    const API_BASE_URLS: [&str; 2] = ["https://gotap.123371.com", "https://gotop.123371.com"];
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|error| format!("无法创建服务器请求：{error}"))?;
+    let mut last_error = None;
+    for base_url in API_BASE_URLS {
+        let response = match client
+            .get(format!("{base_url}/v1/conversions/{job_id}/download"))
+            .bearer_auth(&access_token)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                last_error = Some(error);
+                continue;
+            }
+        };
+        let status = response.status();
+        let filename = response
+            .headers()
+            .get(reqwest::header::CONTENT_DISPOSITION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split("filename=\"").nth(1))
+            .and_then(|value| value.split('\"').next())
+            .unwrap_or("converted-file")
+            .to_owned();
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_owned();
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| format!("下载转换结果失败：{error}"))?;
+        if !status.is_success() {
+            let error: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+            return Err(error
+                .get("detail")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("下载转换结果失败")
+                .to_owned());
+        }
+        return Ok(ConversionDownload {
+            filename,
+            content_type,
+            bytes: bytes.to_vec(),
+        });
+    }
+    Err(format!(
+        "无法连接服务器，请检查网络或稍后重试：{}",
+        last_error
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "未知错误".into())
+    ))
+}

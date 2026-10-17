@@ -13,6 +13,8 @@ from .config import (
     DB_BACKUP_RETENTION_DAYS,
     DB_BUSY_TIMEOUT_MS,
     DB_PATH,
+    DOCUMENT_CONVERSION_RETENTION_DAYS,
+    DOCUMENT_CONVERSION_STORAGE_DIR,
     USAGE_REPORT_RETENTION_DAYS,
 )
 
@@ -74,12 +76,25 @@ def database_maintenance_once() -> None:
 
     cutoff = application.iso(application.now() - timedelta(days=USAGE_REPORT_RETENTION_DAYS))
     with application.db() as connection:
+        conversion_cutoff = application.iso(application.now())
+        expired_conversions = connection.execute(
+            "SELECT id, input_path, output_path FROM document_conversion_jobs WHERE expires_at < ?",
+            (conversion_cutoff,),
+        ).fetchall()
+        connection.execute("DELETE FROM document_conversion_jobs WHERE expires_at < ?", (conversion_cutoff,))
         deleted = connection.execute(
             "DELETE FROM usage_reports WHERE reported_at < ?", (cutoff,)
         ).rowcount
         release_cleanup = application._prune_old_releases(connection)
         connection.execute("PRAGMA optimize")
     application._remove_release_files(release_cleanup)
+    storage_root = DOCUMENT_CONVERSION_STORAGE_DIR.resolve()
+    for row in expired_conversions:
+        candidate = Path(row["input_path"]).resolve().parent
+        if row["output_path"]:
+            candidate = Path(row["output_path"]).resolve().parent.parent
+        if candidate.is_relative_to(storage_root):
+            shutil.rmtree(candidate, ignore_errors=True)
     backup = online_database_backup()
     logger.info(
         "数据库维护完成：清理 %s 条流量明细、%s 个旧版本，在线备份 %s",
