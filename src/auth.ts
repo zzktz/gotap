@@ -24,6 +24,15 @@ export interface AuthSettings {
   registration_enabled: boolean;
 }
 
+export interface FeatureModule {
+  module_key: string;
+  name: string;
+  description: string;
+  icon: string;
+  enabled: boolean;
+  sort_order: number;
+}
+
 export interface FeedbackAttachment {
   id: string;
   filename: string;
@@ -159,6 +168,13 @@ export function submitFeedback(
 
 export function getAuthSettings(): Promise<AuthSettings> {
   return request<AuthSettings>("/v1/auth/settings", { method: "GET" });
+}
+
+export async function getFeatureModules(): Promise<FeatureModule[]> {
+  const response = await request<{ items: FeatureModule[] }>("/v1/modules", {
+    method: "GET",
+  });
+  return response.items;
 }
 
 export async function login(

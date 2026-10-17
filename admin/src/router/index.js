@@ -8,6 +8,7 @@ import SettingsPage from "@/pages/SettingsPage.vue";
 import ProfilePage from "@/pages/ProfilePage.vue";
 import ReleasesPage from "@/pages/ReleasesPage.vue";
 import FeedbackPage from "@/pages/FeedbackPage.vue";
+import ModulesPage from "@/pages/ModulesPage.vue";
 
 const router = createRouter({
   history: createWebHistory("/admin/"),
@@ -33,6 +34,11 @@ const router = createRouter({
           path: "feedback",
           component: FeedbackPage,
           meta: { title: "问题反馈" },
+        },
+        {
+          path: "modules",
+          component: ModulesPage,
+          meta: { title: "模块管理" },
         },
         {
           path: "settings",

@@ -38,6 +38,10 @@ SQLite 数据库默认使用 WAL 模式和 5 秒 busy timeout。`usage_reports` 
 - `PATCH /v1/admin/profile`
 - `GET /v1/admin/settings`
 - `PATCH /v1/admin/settings`
+- `GET /v1/admin/modules`
+- `POST /v1/admin/modules`
+- `PATCH /v1/admin/modules/{module_key}`
+- `GET /v1/modules` (客户端读取已启用功能模块)
 - `GET /v1/admin/overview`
 - `GET /v1/admin/relays`
 - `POST /v1/admin/relays`
@@ -85,6 +89,8 @@ SQLite 数据库默认使用 WAL 模式和 5 秒 busy timeout。`usage_reports` 
 新租约会按活跃租约数与权重分配到一个已启用且未排空的 relay，并分配该 relay 端口范围内的独立 Shadowsocks 凭据和端口（默认 `30000-39999`）。计量适配器通过内部同步接口只读取自己 `RELAY_ID` 对应的租约并生成 relay 配置。旧租约会在下一次刷新时迁移到独立凭据；当原 relay 被停用或排空时，刷新会自动迁移到其他可用 relay。
 
 管理后台“Relay 管理”支持新增、编辑、启用/停用、排空和删除节点。创建节点后只显示一次 Agent Token，请写入对应 relay 的 `RELAY_ID`、`RELAY_TOKEN`；删除仅允许没有历史租约的节点，已有租约应先停用或排空并等待过期。旧部署启动时会自动创建 `default` relay，并把历史租约和旧 `relay_health` 记录迁移到该节点；原有 `METERING_TOKEN` 仍兼容默认节点，新增节点推荐使用独立 Token。
+
+管理后台“模块管理”用于维护客户端功能目录：创建、编辑模块名称、说明、图标与排序，并启用或关闭模块。模块标识创建后不可修改，客户端通过公开的 `/v1/modules` 接口读取已启用模块；新增模块仍需在客户端实现并绑定相同标识。现有“自动点击器”模块会在首次数据库初始化时自动创建。
 
 多 relay 部署示例：每台 relay 使用相同的 `MANAGEMENT_API_URL`，但设置不同的 `RELAY_ID` 和后台生成的 `RELAY_TOKEN`，并为各节点配置不同的公网主机地址及端口范围。端口唯一性按 `(relay_id, relay_port)` 约束，因此不同节点可以复用相同的端口号。
 

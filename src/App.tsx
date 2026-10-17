@@ -22,6 +22,7 @@ import {
   clearSession,
   formatErrorMessage,
   getAuthSettings,
+  getFeatureModules,
   getRememberedLogin,
   getSession,
   login,
@@ -1809,6 +1810,7 @@ function AuthenticatedApp() {
     getSession(),
   );
   const [authReady, setAuthReady] = useState(false);
+  const [clickerEnabled, setClickerEnabled] = useState(true);
   useEffect(() => {
     let active = true;
     const storedSession = getSession();
@@ -1848,6 +1850,20 @@ function AuthenticatedApp() {
     );
     return () => window.clearInterval(timer);
   }, [authReady, session]);
+  useEffect(() => {
+    if (!authReady || !session) return undefined;
+    let active = true;
+    void getFeatureModules()
+      .then((modules) => {
+        if (active) setClickerEnabled(modules.some((module) => module.module_key === "clicker"));
+      })
+      .catch(() => {
+        // 模块服务暂时不可用时不影响本地点击功能。
+      });
+    return () => {
+      active = false;
+    };
+  }, [authReady, session]);
   if (!authReady) return null;
   if (!session) {
     return (
@@ -1859,12 +1875,31 @@ function AuthenticatedApp() {
     );
   }
   return (
-    <ClickerPage
-      onLogout={() => {
-        void logout();
-        setSession(null);
-      }}
-    />
+    clickerEnabled ? (
+      <ClickerPage
+        onLogout={() => {
+          void logout();
+          setSession(null);
+        }}
+      />
+    ) : (
+      <main className="auth-shell">
+        <section className="card auth-card">
+          <p className="eyebrow">功能暂不可用</p>
+          <h2>自动点击器已关闭</h2>
+          <p>此功能目前由管理员关闭，请稍后再试或联系管理员。</p>
+          <Button
+            className="hero-button auth-submit"
+            onPress={() => {
+              void logout();
+              setSession(null);
+            }}
+          >
+            退出登录
+          </Button>
+        </section>
+      </main>
+    )
   );
 }
 

@@ -72,6 +72,23 @@ class AdminSettingsUpdateRequest(BaseModel):
     default_account_valid_days: int | None = Field(default=None, ge=0, le=3650)
 
 
+class AdminModuleCreateRequest(BaseModel):
+    module_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=500)
+    icon: str = Field(default="AppstoreOutlined", min_length=1, max_length=80)
+    enabled: bool = True
+    sort_order: int = Field(default=0, ge=0, le=10000)
+
+
+class AdminModuleUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=500)
+    icon: str | None = Field(default=None, min_length=1, max_length=80)
+    enabled: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=10000)
+
+
 class AdminProfileUpdateRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     email: EmailStr | None = None

@@ -38,6 +38,8 @@ const active = computed(() =>
       ? "/releases"
       : route.path.startsWith("/feedback")
         ? "/feedback"
+        : route.path.startsWith("/modules")
+          ? "/modules"
         : route.path,
 );
 const title = computed(() => route.meta.title || "运行总览");
@@ -121,6 +123,9 @@ onBeforeUnmount(() => {
         >
         <a-menu-item key="/feedback"
           ><MessageOutlined /><span>问题反馈</span></a-menu-item
+        >
+        <a-menu-item key="/modules"
+          ><AppstoreOutlined /><span>模块管理</span></a-menu-item
         >
         <a-menu-divider />
         <a-menu-item key="/settings"

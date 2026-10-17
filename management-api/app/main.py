@@ -83,6 +83,8 @@ from .schemas import (
     AdminCreateUserRequest,
     AdminFeedbackReplyRequest,
     AdminLoginRequest,
+    AdminModuleCreateRequest,
+    AdminModuleUpdateRequest,
     AdminProfileUpdateRequest,
     AdminQuotaRequest,
     AdminRelayCreateRequest,
@@ -746,6 +748,16 @@ def init_db() -> None:
                 value TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS feature_modules (
+                module_key TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                icon TEXT NOT NULL DEFAULT 'AppstoreOutlined',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS relay_health (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 relay_id TEXT NOT NULL UNIQUE REFERENCES relays(id) ON DELETE CASCADE,
@@ -857,6 +869,13 @@ def init_db() -> None:
         connection.execute(
             "INSERT OR IGNORE INTO system_settings(key, value, updated_at) VALUES (?, ?, ?)",
             (REGISTRATION_SETTING_KEY, "1", iso(now())),
+        )
+        module_created_at = iso(now())
+        connection.execute(
+            """INSERT OR IGNORE INTO feature_modules(
+                   module_key, name, description, icon, enabled, sort_order, created_at, updated_at
+               ) VALUES ('clicker', '自动点击器', '桌面自动点击功能', 'ThunderboltOutlined', 1, 10, ?, ?)""",
+            (module_created_at, module_created_at),
         )
         connection.execute(
             "INSERT OR IGNORE INTO system_settings(key, value, updated_at) VALUES (?, ?, ?)",
@@ -1169,6 +1188,28 @@ def healthz() -> dict[str, str]:
 def auth_settings() -> dict[str, bool]:
     with db() as connection:
         return {"registration_enabled": registration_enabled(connection)}
+
+
+def feature_module_payload(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "module_key": row["module_key"],
+        "name": row["name"],
+        "description": row["description"],
+        "icon": row["icon"],
+        "enabled": bool(row["enabled"]),
+        "sort_order": int(row["sort_order"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+@app.get("/v1/modules")
+def public_feature_modules() -> dict[str, list[dict[str, object]]]:
+    with db() as connection:
+        rows = connection.execute(
+            "SELECT * FROM feature_modules WHERE enabled = 1 ORDER BY sort_order, name, module_key"
+        ).fetchall()
+    return {"items": [feature_module_payload(row) for row in rows]}
 
 
 def _github_json(url: str) -> dict:
@@ -2031,6 +2072,73 @@ def admin_update_settings(
                 connection, DEFAULT_ACCOUNT_VALID_DAYS_SETTING_KEY, DEFAULT_ACCOUNT_VALID_DAYS
             ),
         }
+
+
+@app.get("/v1/admin/modules")
+def admin_modules(admin: Annotated[dict[str, str], Depends(current_admin)]) -> dict[str, list[dict[str, object]]]:
+    del admin
+    with db() as connection:
+        rows = connection.execute(
+            "SELECT * FROM feature_modules ORDER BY sort_order, name, module_key"
+        ).fetchall()
+    return {"items": [feature_module_payload(row) for row in rows]}
+
+
+@app.post("/v1/admin/modules", status_code=status.HTTP_201_CREATED)
+def admin_create_module(
+    payload: AdminModuleCreateRequest,
+    admin: Annotated[dict[str, str], Depends(current_admin)],
+) -> dict[str, object]:
+    del admin
+    module_key = payload.module_key.strip().lower()
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="模块名称不能为空")
+    updated_at = iso(now())
+    with db() as connection:
+        try:
+            connection.execute(
+                """INSERT INTO feature_modules(
+                       module_key, name, description, icon, enabled, sort_order, created_at, updated_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (module_key, name, payload.description.strip(), payload.icon.strip(), int(payload.enabled), payload.sort_order, updated_at, updated_at),
+            )
+        except sqlite3.IntegrityError as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="模块标识已存在") from error
+        row = connection.execute("SELECT * FROM feature_modules WHERE module_key = ?", (module_key,)).fetchone()
+    return feature_module_payload(row)
+
+
+@app.patch("/v1/admin/modules/{module_key}")
+def admin_update_module(
+    module_key: str,
+    payload: AdminModuleUpdateRequest,
+    admin: Annotated[dict[str, str], Depends(current_admin)],
+) -> dict[str, object]:
+    del admin
+    values = payload.model_dump(exclude_unset=True)
+    if "name" in values:
+        values["name"] = values["name"].strip()
+        if not values["name"]:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="模块名称不能为空")
+    if "description" in values:
+        values["description"] = values["description"].strip()
+    if "icon" in values:
+        values["icon"] = values["icon"].strip()
+    if "enabled" in values and values["enabled"] is not None:
+        values["enabled"] = int(values["enabled"])
+    values["updated_at"] = iso(now())
+    with db() as connection:
+        row = connection.execute("SELECT * FROM feature_modules WHERE module_key = ?", (module_key,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模块不存在")
+        assignments = ", ".join(f"{key} = ?" for key in values)
+        connection.execute(
+            f"UPDATE feature_modules SET {assignments} WHERE module_key = ?",
+            (*values.values(), module_key),
+        )
+        updated = connection.execute("SELECT * FROM feature_modules WHERE module_key = ?", (module_key,)).fetchone()
+    return feature_module_payload(updated)
 
 
 def _release_or_404(connection: sqlite3.Connection, release_id: str) -> sqlite3.Row:
