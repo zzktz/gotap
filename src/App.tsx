@@ -1417,7 +1417,7 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
                   role="menuitem"
                   type="button"
                 >
-                  反馈
+                  问题反馈
                 </button>
                 <button
                   onClick={() => {
@@ -1427,7 +1427,7 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
                   role="menuitem"
                   type="button"
                 >
-                  退出
+                  退出程序
                 </button>
                 <button
                   onClick={() => {
@@ -2015,16 +2015,19 @@ function ModuleHome({
   onSelect,
   isDark,
   onToggleTheme,
-  onLogout,
 }: {
   session: AuthSession;
   modules: Awaited<ReturnType<typeof getFeatureModules>>;
   onSelect: (moduleKey: string) => void;
   isDark: boolean;
   onToggleTheme: () => void;
-  onLogout: () => void;
 }) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+  const [feedbackSuccess, setFeedbackSuccess] = useState("");
   const accountMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
@@ -2043,6 +2046,25 @@ function ModuleHome({
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [accountMenuOpen]);
+  const sendHomeFeedback = async () => {
+    const message = feedbackMessage.trim();
+    if (!message) {
+      setFeedbackError("请填写反馈内容");
+      return;
+    }
+    setFeedbackBusy(true);
+    setFeedbackError("");
+    setFeedbackSuccess("");
+    try {
+      await submitFeedback(message, []);
+      setFeedbackMessage("");
+      setFeedbackSuccess("反馈已提交，感谢你的反馈！");
+    } catch (error) {
+      setFeedbackError(formatErrorMessage(error));
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
   const iconFor = (icon: string) => {
     const icons: Record<string, string> = {
       ThunderboltOutlined: "⚡",
@@ -2091,12 +2113,15 @@ function ModuleHome({
                 <button
                   onClick={() => {
                     setAccountMenuOpen(false);
-                    onLogout();
+                    setFeedbackMessage("");
+                    setFeedbackError("");
+                    setFeedbackSuccess("");
+                    setFeedbackOpen(true);
                   }}
                   role="menuitem"
                   type="button"
                 >
-                  返回
+                  反馈
                 </button>
                 <button
                   onClick={() => {
@@ -2130,6 +2155,58 @@ function ModuleHome({
           <div className="module-empty card">暂时没有已启用的功能模块。</div>
         )}
       </section>
+      {feedbackOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="feedback-dialog" role="dialog" aria-modal="true" aria-labelledby="home-feedback-title">
+            <div className="info-dialog-heading">
+              <div>
+                <p className="eyebrow">反馈</p>
+                <h2 id="home-feedback-title">问题反馈</h2>
+              </div>
+              <Button
+                aria-label="关闭反馈弹出层"
+                className="dialog-close-button"
+                isIconOnly
+                isDisabled={feedbackBusy}
+                onPress={() => setFeedbackOpen(false)}
+                size="sm"
+                variant="light"
+              >
+                ×
+              </Button>
+            </div>
+            <textarea
+              className="feedback-textarea"
+              maxLength={5000}
+              onChange={(event) => setFeedbackMessage(event.target.value)}
+              placeholder="请描述遇到的问题或希望改进的地方"
+              value={feedbackMessage}
+            />
+            {feedbackError && <p className="error">{feedbackError}</p>}
+            {feedbackSuccess && <p className="feedback-success" role="status">{feedbackSuccess}</p>}
+            <div className="feedback-dialog-actions">
+              <Button
+                className="hero-button"
+                isDisabled={feedbackBusy}
+                onPress={() => setFeedbackOpen(false)}
+                size="sm"
+                variant="light"
+              >
+                关闭
+              </Button>
+              <Button
+                className="hero-button"
+                color="primary"
+                isDisabled={feedbackBusy}
+                onPress={() => void sendHomeFeedback()}
+                size="sm"
+              >
+                {feedbackBusy ? "提交中…" : "提交反馈"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -2239,10 +2316,6 @@ function AuthenticatedApp() {
       onSelect={setSelectedModule}
       isDark={isDark}
       onToggleTheme={toggleTheme}
-      onLogout={() => {
-        void logout();
-        setSession(null);
-      }}
     />
   );
 }
