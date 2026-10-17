@@ -62,18 +62,6 @@ if [ -n "$missing_config" ]; then
     exit 0
 fi
 
-if [ "$frontend_changed" -eq 1 ]; then
-    if ! command -v npm >/dev/null 2>&1; then
-        echo "本地未找到 npm，无法构建管理后台前端。" >&2
-        exit 1
-    fi
-    echo "检测到 admin/ 变更，开始本地编译管理后台前端……"
-    if ! npm ci --prefix "$project_root/admin" || ! GOTAP_BUILD_COMMIT="$local_sha" npm run build --prefix "$project_root/admin"; then
-        echo "管理后台前端编译失败，已停止生产部署。" >&2
-        exit 1
-    fi
-fi
-
 quote_argument() {
     # 将目录安全地作为远端 Shell 参数传递。
     printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
@@ -103,19 +91,4 @@ if [ "$ssh_status" -eq 0 ]; then
 else
     echo "生产管理 API 部署失败；代码已推送，请登录服务器检查。" >&2
     exit 1
-fi
-
-if [ "$frontend_changed" -eq 1 ]; then
-    echo "开始发布管理后台静态文件……"
-    rsync_ssh="ssh -p $GOTAP_DEPLOY_SSH_PORT -o BatchMode=yes -o StrictHostKeyChecking=yes"
-    if [ -n "$GOTAP_DEPLOY_SSH_KEY" ]; then
-        rsync_ssh="$rsync_ssh -i $GOTAP_DEPLOY_SSH_KEY"
-    fi
-    # shellcheck disable=SC2086
-    if rsync -a --delete -e "$rsync_ssh" "$project_root/admin/dist/" "$ssh_target:$GOTAP_DEPLOY_FRONTEND_DIR/"; then
-        echo "管理后台静态文件发布完成。"
-    else
-        echo "管理后台静态文件发布失败；后端已部署，请检查远端目录权限。" >&2
-        exit 1
-    fi
 fi

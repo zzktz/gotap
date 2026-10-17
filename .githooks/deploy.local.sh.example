@@ -7,8 +7,8 @@ GOTAP_DEPLOY_SSH_PORT=22
 GOTAP_DEPLOY_REPO_DIR=
 GOTAP_DEPLOY_FRONTEND_DIR=
 
-# 前端由本地钩子编译；服务器只拉取后端并重启 API。
-GOTAP_DEPLOY_UPDATE_COMMAND='git pull --ff-only origin v2 && rsync -a --delete --exclude=.env --exclude=data/ --exclude=backups/ --exclude=__pycache__/ /opt/gotap-source/management-api/ /opt/gotap-api/'
+# 前端和后端都在服务器上更新；仅当 GOTAP_BUILD_ADMIN=1 时构建前端。
+GOTAP_DEPLOY_UPDATE_COMMAND='git pull --ff-only origin v2 && rsync -a --delete --exclude=.env --exclude=data/ --exclude=backups/ --exclude=__pycache__/ /opt/gotap-source/management-api/ /opt/gotap-api/ && if [ "$GOTAP_BUILD_ADMIN" = "1" ]; then PATH=/www/server/nodejs/v24.22.0/bin:$PATH npm_config_proxy=http://127.0.0.1:18081 npm_config_https_proxy=http://127.0.0.1:18081 npm ci --prefix /opt/gotap-source/admin && PATH=/www/server/nodejs/v24.22.0/bin:$PATH GOTAP_BUILD_COMMIT="$(git rev-parse --short HEAD)" npm run build --prefix /opt/gotap-source/admin && rsync -a --delete /opt/gotap-source/admin/dist/ /www/wwwroot/gotap.123371.com/admin/; fi'
 GOTAP_DEPLOY_RESTART_COMMAND='docker compose -f management-api/docker-compose.yml up -d --build api'
 
 # 可选：指定 SSH 私钥；不填写时使用 ~/.ssh 的默认密钥。
