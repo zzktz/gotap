@@ -21,7 +21,7 @@ const artifactInputs = {}
 const signatureInputs = {}
 const uploading = ref('')
 const importing = ref(false)
-const pagination = reactive({ current: 1, pageSize: 10, total: 0, showTotal: total => `共 ${total} 个版本` })
+const pagination = reactive({ current: 1, pageSize: 3, total: 0, showTotal: total => `共 ${total} 个版本` })
 let refreshTimer = null
 
 function formatDate(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-' }
@@ -135,7 +135,7 @@ onBeforeUnmount(() => { if (refreshTimer) window.clearInterval(refreshTimer) })
 
 <template>
   <div>
-    <div class="page-title"><div><h1>版本发布</h1><p>仅有后台已发布的版本会提供给客户端更新。</p></div><a-space><a-button @click="load()">刷新</a-button><a-button :loading="importing" @click="importLatestRelease"><CloudDownloadOutlined />一键创建</a-button><a-button type="primary" @click="openCreate">手动创建</a-button></a-space></div>
+    <div class="page-title"><div><h1>版本发布</h1><p>仅保留最新 3 个版本，较早版本会自动删除；仅有后台已发布的版本会提供给客户端更新。</p></div><a-space><a-button @click="load()">刷新</a-button><a-button :loading="importing" @click="importLatestRelease"><CloudDownloadOutlined />一键创建</a-button><a-button type="primary" @click="openCreate">手动创建</a-button></a-space></div>
     <a-alert type="info" show-icon message="发布要求" description="每个版本需要同时上传 Windows、macOS Apple 芯片和 macOS Intel 芯片的 updater 安装包及 .sig 文件，发布后才会对客户端可见。" class="release-notice" />
     <a-card :bordered="false"><a-spin :spinning="loading"><a-empty v-if="!rows.length && !loading" description="还没有版本草稿" /><a-collapse v-else accordion>
       <a-collapse-panel v-for="record in rows" :key="record.id">
@@ -146,7 +146,7 @@ onBeforeUnmount(() => { if (refreshTimer) window.clearInterval(refreshTimer) })
         <div class="release-assets"><div v-for="platform in platforms" :key="platform.key" class="release-asset"><div><strong>{{ platform.label }}</strong><div v-if="assetFor(record, platform.key)" class="muted">{{ assetFor(record, platform.key).filename }} · {{ formatBytes(assetFor(record, platform.key).size_bytes) }} · SHA256 {{ assetFor(record, platform.key).sha256.slice(0, 12) }}…</div><div v-else class="muted">尚未上传（{{ platform.packageHint }}）</div></div><a-tag v-if="assetFor(record, platform.key)" color="green">已上传</a-tag><a-tag v-else>待上传</a-tag><template v-if="record.status === 'draft'"><input :ref="el => artifactInputs[fileKey(record, platform.key)] = el" type="file" hidden @change="chooseFile(fileKey(record, platform.key), 'artifact', $event)" /><input :ref="el => signatureInputs[fileKey(record, platform.key)] = el" type="file" hidden accept=".sig" @change="chooseFile(fileKey(record, platform.key), 'signature', $event)" /><a-button size="small" :disabled="record.download_status === 'downloading'" @click="artifactInputs[fileKey(record, platform.key)]?.click()">选择安装包</a-button><a-button size="small" :disabled="record.download_status === 'downloading'" @click="signatureInputs[fileKey(record, platform.key)]?.click()">选择签名</a-button><a-button size="small" type="primary" :loading="uploading === `${record.id}:${platform.key}`" :disabled="record.download_status === 'downloading' || !(selected[fileKey(record, platform.key)]?.artifact && selected[fileKey(record, platform.key)]?.signature)" @click="uploadAsset(record, platform.key)"><UploadOutlined />上传</a-button></template></div></div>
         <div class="release-actions"><a-button v-if="record.status === 'draft'" @click="openEdit(record)"><EditOutlined />编辑说明</a-button><a-button v-if="record.status === 'draft'" type="primary" :disabled="record.download_status === 'downloading'" @click="publish(record)">发布版本</a-button><a-button v-else @click="unpublish(record)">撤回版本</a-button><a-button danger :disabled="record.download_status === 'downloading'" @click="deleteRelease(record)"><DeleteOutlined />删除版本</a-button></div>
       </a-collapse-panel>
-    </a-collapse><a-pagination v-if="pagination.total" class="release-pagination" :current="pagination.current" :page-size="pagination.pageSize" :total="pagination.total" :show-size-changer="true" :show-total="pagination.showTotal" @change="changePage" /></a-spin></a-card>
+    </a-collapse><a-pagination v-if="pagination.total" class="release-pagination" :current="pagination.current" :page-size="pagination.pageSize" :total="pagination.total" :show-size-changer="false" :show-total="pagination.showTotal" @change="changePage" /></a-spin></a-card>
     <a-modal v-model:open="createOpen" title="创建版本草稿" :confirm-loading="saving" ok-text="创建" cancel-text="取消" @ok="createRelease"><a-form layout="vertical"><a-form-item label="版本号" required><a-input v-model:value="form.version" placeholder="例如 1.0.22" /></a-form-item><a-form-item label="更新说明"><a-textarea v-model:value="form.notes" :rows="6" placeholder="描述本次版本更新内容" /></a-form-item></a-form></a-modal>
     <a-modal v-model:open="editOpen" title="编辑更新说明" :confirm-loading="saving" ok-text="保存" cancel-text="取消" @ok="saveNotes"><a-textarea v-model:value="form.notes" :rows="8" placeholder="描述本次版本更新内容" /></a-modal>
   </div>

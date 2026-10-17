@@ -70,6 +70,7 @@ SQLite 数据库默认使用 WAL 模式和 5 秒 busy timeout。`usage_reports` 
 - `DELETE /v1/admin/releases/{release_id}`
 
 版本删除接口可删除草稿或已发布版本（下载中的版本除外），并会同时清理该版本的数据库记录、所有平台更新包、签名文件及版本存储目录。
+后台版本发布页面只保留按版本号排序的最新 3 个版本。创建或发布新版本，以及打开版本列表时，系统会自动删除更早的版本及其更新包、签名文件和存储目录；正在后台下载的版本会等待下载任务结束后再清理。
 
 管理员账号由 `ADMIN_EMAIL` 与 `ADMIN_PASSWORD_HASH`（推荐）或 `ADMIN_PASSWORD` 配置，不与客户端普通用户账号共用令牌。管理员令牌的 JWT 类型独立为 `admin_access`，不能调用客户端接口。
 

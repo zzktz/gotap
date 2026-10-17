@@ -72,6 +72,7 @@ UPDATE_GITHUB_REPOSITORY = os.getenv("UPDATE_GITHUB_REPOSITORY", "zzktz/gotap").
 GITHUB_PROXY_URL = os.getenv("GITHUB_PROXY_URL", "").strip()
 UPDATE_STORAGE_DIR = Path(os.getenv("UPDATE_STORAGE_DIR", str(DB_PATH.parent / "updates")))
 UPDATE_MAX_ASSET_BYTES = int(os.getenv("UPDATE_MAX_ASSET_BYTES", "2000000000"))
+RELEASE_RETENTION_COUNT = 3
 FEEDBACK_STORAGE_DIR = Path(os.getenv("FEEDBACK_STORAGE_DIR", str(DB_PATH.parent / "feedback")))
 FEEDBACK_MAX_IMAGES = 3
 FEEDBACK_MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -1529,6 +1530,34 @@ def _version_key(version: str) -> tuple:
     return (int(match.group(1)), int(match.group(2)), int(match.group(3)), 1 if not prerelease else 0, prerelease or "")
 
 
+def _prune_old_releases(connection: sqlite3.Connection) -> list[tuple[str, list[str]]]:
+    """保留最新版本，并返回需要清理的旧版本文件。"""
+    rows = connection.execute("SELECT id, version, created_at, download_status FROM app_releases").fetchall()
+    ordered = sorted(rows, key=lambda row: (_version_key(row["version"]), row["created_at"]), reverse=True)
+    cleanup: list[tuple[str, list[str]]] = []
+    for row in ordered[RELEASE_RETENTION_COUNT:]:
+        # 后台下载中的版本由下载任务完成后再清理，避免任务写入已删除的目录。
+        if row["download_status"] == "downloading":
+            continue
+        assets = connection.execute(
+            "SELECT storage_path FROM app_release_assets WHERE release_id = ?",
+            (row["id"],),
+        ).fetchall()
+        cleanup.append((row["id"], [asset["storage_path"] for asset in assets]))
+        connection.execute("DELETE FROM app_releases WHERE id = ?", (row["id"],))
+    return cleanup
+
+
+def _remove_release_files(cleanup: list[tuple[str, list[str]]]) -> None:
+    """删除版本记录对应的更新包、签名文件和存储目录。"""
+    for release_id, paths in cleanup:
+        for path in paths:
+            Path(path).unlink(missing_ok=True)
+        release_dir = UPDATE_STORAGE_DIR.resolve() / release_id
+        if release_dir.is_dir() and not release_dir.is_symlink():
+            shutil.rmtree(release_dir)
+
+
 def _release_payload(row: sqlite3.Row, assets: list[sqlite3.Row] | list[dict], *, base_url: str) -> dict:
     platforms = {}
     for asset in assets:
@@ -2323,7 +2352,9 @@ def admin_releases(
     page_size: int = Query(default=10, ge=1, le=100),
 ) -> dict:
     with db() as connection:
+        cleanup = _prune_old_releases(connection)
         items = _release_rows(connection)
+    _remove_release_files(cleanup)
     items.sort(key=lambda item: (_version_key(item["version"]), item["created_at"]), reverse=True)
     total = len(items)
     offset = (page - 1) * page_size
@@ -2348,8 +2379,10 @@ def admin_create_release(
                 (release_id, version, payload.notes.strip(), created_at),
             )
             row = connection.execute("SELECT * FROM app_releases WHERE id = ?", (release_id,)).fetchone()
+            cleanup = _prune_old_releases(connection)
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该版本已经存在") from None
+    _remove_release_files(cleanup)
     return _release_payload(row, [], base_url=UPDATE_PUBLIC_BASE_URL)
 
 
@@ -2451,7 +2484,9 @@ def admin_import_github_release(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该版本已经存在，请先处理已有草稿") from None
     with db() as connection:
         row = connection.execute("SELECT * FROM app_releases WHERE id = ?", (release_id,)).fetchone()
+        cleanup = _prune_old_releases(connection)
     background_tasks.add_task(_download_imported_release_assets, release_id, selected)
+    _remove_release_files(cleanup)
     return _release_payload(row, [], base_url=UPDATE_PUBLIC_BASE_URL)
 
 
@@ -2553,6 +2588,8 @@ def admin_publish_release(release_id: str, admin: Annotated[dict[str, str], Depe
         published_at = iso(now())
         connection.execute("UPDATE app_releases SET status = 'published', published_at = ? WHERE id = ?", (published_at, release_id))
         row = connection.execute("SELECT * FROM app_releases WHERE id = ?", (release_id,)).fetchone()
+        cleanup = _prune_old_releases(connection)
+    _remove_release_files(cleanup)
     return _release_payload(row, assets, base_url=UPDATE_PUBLIC_BASE_URL)
 
 
