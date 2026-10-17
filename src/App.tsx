@@ -1417,7 +1417,7 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
                   role="menuitem"
                   type="button"
                 >
-                  问题反馈
+                  反馈
                 </button>
                 <button
                   onClick={() => {
@@ -1427,7 +1427,7 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
                   role="menuitem"
                   type="button"
                 >
-                  退出程序
+                  退出
                 </button>
                 <button
                   onClick={() => {
@@ -2015,12 +2015,14 @@ function ModuleHome({
   onSelect,
   isDark,
   onToggleTheme,
+  onLogout,
 }: {
   session: AuthSession;
   modules: Awaited<ReturnType<typeof getFeatureModules>>;
   onSelect: (moduleKey: string) => void;
   isDark: boolean;
   onToggleTheme: () => void;
+  onLogout: () => void;
 }) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -2121,7 +2123,17 @@ function ModuleHome({
                   role="menuitem"
                   type="button"
                 >
-                  反馈
+                  问题反馈
+                </button>
+                <button
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    onLogout();
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  退出登录
                 </button>
                 <button
                   onClick={() => {
@@ -2131,7 +2143,7 @@ function ModuleHome({
                   role="menuitem"
                   type="button"
                 >
-                  退出
+                  退出程序
                 </button>
               </div>
             )}
@@ -2316,6 +2328,10 @@ function AuthenticatedApp() {
       onSelect={setSelectedModule}
       isDark={isDark}
       onToggleTheme={toggleTheme}
+      onLogout={() => {
+        void logout();
+        setSession(null);
+      }}
     />
   );
 }
