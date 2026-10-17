@@ -777,7 +777,19 @@ function AuthPage({
   );
 }
 
-function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () => void }) {
+function ClickerPage({
+  session,
+  isDark,
+  onToggleTheme,
+  onLogout,
+  onBack,
+}: {
+  session: AuthSession;
+  isDark: boolean;
+  onToggleTheme: () => void;
+  onLogout: () => void;
+  onBack: () => void;
+}) {
   const [profile, setProfile] = useState<ClickProfile>(DEFAULT_PROFILE);
   const [status, setStatus] = useState<ClickerStatus>({
     state: "idle",
@@ -1354,8 +1366,8 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
     };
   }, []);
   return (
-    <main ref={appShellRef} className="app-shell">
-      <header className="topbar">
+    <main ref={appShellRef} className="app-shell clicker-shell">
+      <header className="topbar module-topbar">
         <div className="brand">
           <div className="brand-mark">
             <CursorLogo />
@@ -1382,6 +1394,9 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
           </div>
         </div>
         <div className="topbar-actions">
+          <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
+          <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
+          <span className="module-account-email">{session.user.email}</span>
           <Button className="hero-button" size="sm" variant="light" onPress={onBack}>
             模块列表
           </Button>
@@ -2309,6 +2324,9 @@ function AuthenticatedApp() {
   return activeModule ? (
     activeModule.module_key === "clicker" ? (
       <ClickerPage
+        session={session}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
         onLogout={() => {
           void logout();
           setSession(null);
@@ -2317,7 +2335,24 @@ function AuthenticatedApp() {
       />
     ) : (
       <main className="app-shell module-shell">
-        <header className="topbar"><Button className="hero-button" onPress={returnToModuleHome}>← 模块列表</Button><strong>{activeModule.name}</strong></header>
+        <header className="topbar module-topbar">
+          <div className="brand">
+            <div className="brand-mark"><CursorLogo /></div>
+            <div>
+              <div className="brand-title">
+                <strong>GoTap</strong>
+                <HomeVersionBadge />
+              </div>
+              <small className="brand-subtitle">{activeModule.name}</small>
+            </div>
+          </div>
+          <div className="topbar-actions">
+            <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={toggleTheme} />
+            <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
+            <span className="module-account-email">{session.user.email}</span>
+            <Button className="hero-button" onPress={returnToModuleHome} size="sm" variant="light">模块列表</Button>
+          </div>
+        </header>
         <section className="module-placeholder card"><p className="eyebrow">{activeModule.module_key}</p><h1>{activeModule.name}</h1><p>模块入口已就绪，具体功能将在后续版本接入。</p></section>
       </main>
     )
