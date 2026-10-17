@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { Modal } from "ant-design-vue";
 import {
   AppstoreOutlined,
   DownOutlined,
@@ -70,15 +71,18 @@ function refreshForUpdate() {
     void checkForUpdate();
     return;
   }
-  const confirmed = window.confirm(
-    `发现管理后台新版本 v${latestVersion.value}，是否立即刷新页面？`,
-  );
-  if (confirmed) window.location.replace(`/admin/?更新=${Date.now()}`);
+  Modal.confirm({
+    title: "版本更新",
+    content: `发现管理后台新版本 v${latestVersion.value}，是否立即刷新页面？`,
+    okText: "确定",
+    cancelText: "取消",
+    onOk: () => window.location.replace(`/admin/?更新=${Date.now()}`),
+  });
 }
 
 onMounted(() => {
   void checkForUpdate(true);
-  versionTimer = window.setInterval(() => void checkForUpdate(), 60_000);
+  versionTimer = window.setInterval(() => void checkForUpdate(), 10_000);
 });
 
 onBeforeUnmount(() => {
