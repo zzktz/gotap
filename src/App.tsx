@@ -19,11 +19,13 @@ import {
 import appPackage from "../package.json";
 import {
   clearRememberedLogin,
+  clearSession,
   formatErrorMessage,
   getAuthSettings,
   getRememberedLogin,
   getSession,
   login,
+  logout,
   register,
   requestPasswordResetCode,
   requestRegistrationCode,
@@ -573,7 +575,7 @@ function AuthPage({
   );
 }
 
-function ClickerPage() {
+function ClickerPage({ onLogout }: { onLogout: () => void }) {
   const [profile, setProfile] = useState<ClickProfile>(DEFAULT_PROFILE);
   const [status, setStatus] = useState<ClickerStatus>({
     state: "idle",
@@ -1222,6 +1224,16 @@ function ClickerPage() {
                 >
                   退出
                 </button>
+                <button
+                  onClick={() => {
+                    setAboutMenuOpen(false);
+                    onLogout();
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  退出登录
+                </button>
               </div>
             )}
           </div>
@@ -1796,30 +1808,64 @@ function AuthenticatedApp() {
   const [session, setSession] = useState<AuthSession | null>(() =>
     getSession(),
   );
-  const [loginRequired, setLoginRequired] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   useEffect(() => {
-    if (!session) return undefined;
+    let active = true;
+    const storedSession = getSession();
+    if (!storedSession) {
+      setAuthReady(true);
+      return () => {
+        active = false;
+      };
+    }
+    void refreshSession(storedSession)
+      .then((nextSession) => {
+        if (active) setSession(nextSession);
+      })
+      .catch(() => {
+        clearSession();
+        if (active) setSession(null);
+      })
+      .finally(() => {
+        if (active) setAuthReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!authReady || !session) return undefined;
     const timer = window.setInterval(
       () => {
         void refreshSession(session)
           .then(setSession)
-          .catch(() => undefined);
+          .catch(() => {
+            clearSession();
+            setSession(null);
+          });
       },
       10 * 60 * 1000,
     );
     return () => window.clearInterval(timer);
-  }, [session]);
-  if (loginRequired) {
+  }, [authReady, session]);
+  if (!authReady) return null;
+  if (!session) {
     return (
       <AuthPage
         onAuthenticated={(nextSession) => {
           setSession(nextSession);
-          setLoginRequired(false);
         }}
       />
     );
   }
-  return <ClickerPage />;
+  return (
+    <ClickerPage
+      onLogout={() => {
+        void logout();
+        setSession(null);
+      }}
+    />
+  );
 }
 
 export default function App() {
