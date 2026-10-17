@@ -252,6 +252,14 @@ html[data-theme="dark"] .brand-version-button { border-color: #526783; color: #b
 html[data-theme="dark"] .brand-version-button:hover,
 html[data-theme="dark"] .brand-version-button:focus-visible { border-color: #7088a4; color: #fff; background: #304967; }
 html[data-theme="dark"] .update-available-dot { box-shadow: 0 0 0 1px #243957, 0 0 0 2px #d94b3e55; }
+html[data-theme="dark"] .modal-backdrop { background: #071426bb; }
+html[data-theme="dark"] .update-dialog { border-color: #405875; background: #1c3150; box-shadow: 0 20px 55px #07142699; }
+html[data-theme="dark"] .update-dialog h2 { color: #edf2f8; }
+html[data-theme="dark"] .update-dialog p { color: #b8c6d8; }
+html[data-theme="dark"] .update-dialog small { color: #aebbd0; }
+html[data-theme="dark"] .update-progress { background: #324b68; }
+html[data-theme="dark"] .update-dialog button[data-variant="light"] { color: #c2cede; }
+html[data-theme="dark"] .update-dialog button[data-variant="light"]:hover { color: #fff; background: #304967; }
 @media (max-width: 600px) {
   .module-topbar { padding: 12px 18px; }
   .module-account-email { display: none; }
