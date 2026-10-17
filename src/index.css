@@ -1450,7 +1450,7 @@ h2 {
 .art-spark-two { bottom: 0; left: 35px; font-size: 25px; }
 .auth-visual-copy .eyebrow { margin-bottom: 9px; color: #4387b1; }
 .auth-visual-copy h2 { color: #193650; font-size: clamp(20px, 2.15vw, 25px); line-height: 1.4; letter-spacing: -.04em; white-space: nowrap; }
-.auth-visual-copy > p:last-child { max-width: 330px; margin: 11px 0 0; color: #788b9c; font-size: 13px; line-height: 1.7; }
+.auth-visual-copy .auth-subtitle { margin: 0; color: #788b9c; font-size: 12px; line-height: 1.6; }
 .auth-visual-footer { color: #9aabba; font-size: 11px; letter-spacing: .08em; }
 .error,
 .success {

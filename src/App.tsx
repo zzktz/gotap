@@ -454,8 +454,7 @@ function AuthPage({
           <span className="art-spark art-spark-two">✧</span>
         </div>
         <div className="auth-visual-copy">
-          <p className="eyebrow">轻松开始</p>
-          <p>简单、可靠的桌面工具，让日常工作更从容。</p>
+          <p className="auth-subtitle">一款常用工具集</p>
         </div>
       </aside>
       <section className="auth-panel">
