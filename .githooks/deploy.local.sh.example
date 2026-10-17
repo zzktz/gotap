@@ -5,9 +5,10 @@ GOTAP_DEPLOY_SSH_USER=
 GOTAP_DEPLOY_REMOTE_HOST=
 GOTAP_DEPLOY_SSH_PORT=22
 GOTAP_DEPLOY_REPO_DIR=
+GOTAP_DEPLOY_FRONTEND_DIR=
 
-# 生产仓库目录下执行的更新、后端同步和按需前端构建命令。
-GOTAP_DEPLOY_UPDATE_COMMAND='git pull --ff-only origin v2 && rsync -a --delete --exclude=.env --exclude=data/ --exclude=backups/ --exclude=__pycache__/ /opt/gotap-source/management-api/ /opt/gotap-api/ && if [ "$GOTAP_BUILD_ADMIN" = "1" ]; then docker run --rm -e GOTAP_BUILD_COMMIT="$(git rev-parse --short HEAD)" -v /opt/gotap-source/admin:/app -w /app node:20-bookworm-slim sh -c "npm ci && npm run build" && rsync -a --delete /opt/gotap-source/admin/dist/ /www/wwwroot/gotap.123371.com/admin/; fi'
+# 前端由本地钩子编译；服务器只拉取后端并重启 API。
+GOTAP_DEPLOY_UPDATE_COMMAND='git pull --ff-only origin v2 && rsync -a --delete --exclude=.env --exclude=data/ --exclude=backups/ --exclude=__pycache__/ /opt/gotap-source/management-api/ /opt/gotap-api/'
 GOTAP_DEPLOY_RESTART_COMMAND='docker compose -f management-api/docker-compose.yml up -d --build api'
 
 # 可选：指定 SSH 私钥；不填写时使用 ~/.ssh 的默认密钥。
