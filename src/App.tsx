@@ -437,8 +437,13 @@ function AuthPage({
       <aside className="auth-visual">
         <div className="auth-visual-brand">
           <div className="brand-mark auth-brand-mark"><CursorLogo /></div>
-          <strong>GoTap</strong>
-          <span className="auth-version-badge">v{appPackage.version}</span>
+          <div className="auth-brand-copy">
+            <div className="auth-brand-title">
+              <strong>GoTap</strong>
+              <span className="auth-version-badge">v{appPackage.version}</span>
+            </div>
+            <p className="auth-subtitle">一款常用工具集</p>
+          </div>
         </div>
         <div className="auth-art" aria-hidden="true">
           <div className="art-orbit art-orbit-one" />
@@ -452,9 +457,6 @@ function AuthPage({
           </div>
           <span className="art-spark art-spark-one">✦</span>
           <span className="art-spark art-spark-two">✧</span>
-        </div>
-        <div className="auth-visual-copy">
-          <p className="auth-subtitle">一款常用工具集</p>
         </div>
       </aside>
       <section className="auth-panel">

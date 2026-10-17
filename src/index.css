@@ -1430,6 +1430,9 @@ h2 {
 }
 .auth-visual-brand { display: flex; align-items: center; gap: 11px; color: #17324a; font-size: 18px; font-weight: 750; }
 .auth-version-badge { margin-left: -3px; padding: 4px 7px; border: 1px solid #d8e5ee; border-radius: 999px; color: #7e91a4; background: #f6f9fb; font-size: 10px; font-weight: 600; letter-spacing: .01em; }
+.auth-brand-copy { display: grid; gap: 3px; }
+.auth-brand-title { display: flex; align-items: center; gap: 9px; }
+.auth-subtitle { margin: 0; color: #788b9c; font-size: 12px; line-height: 1.5; }
 .auth-visual-brand .auth-brand-mark { width: 40px; height: 40px; }
 .auth-art { position: relative; height: 168px; margin: 12px 0 12px; }
 .art-orbit { position: absolute; border: 1px solid #bfd6e5; border-radius: 50%; transform: rotate(-24deg); }
@@ -1448,9 +1451,6 @@ h2 {
 .art-spark { position: absolute; color: #61a5ce; }
 .art-spark-one { top: 0; right: 44px; font-size: 22px; }
 .art-spark-two { bottom: 0; left: 35px; font-size: 25px; }
-.auth-visual-copy .eyebrow { margin-bottom: 9px; color: #4387b1; }
-.auth-visual-copy h2 { color: #193650; font-size: clamp(20px, 2.15vw, 25px); line-height: 1.4; letter-spacing: -.04em; white-space: nowrap; }
-.auth-visual-copy .auth-subtitle { margin: 0; color: #788b9c; font-size: 12px; line-height: 1.6; }
 .auth-visual-footer { color: #9aabba; font-size: 11px; letter-spacing: .08em; }
 .error,
 .success {
