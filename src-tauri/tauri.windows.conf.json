@@ -6,11 +6,11 @@
         "label": "main",
         "title": "GoTap",
         "width": 450,
-        "height": 520,
+        "height": 620,
         "titleBarStyle": "Visible",
         "visible": false,
         "minWidth": 400,
-        "minHeight": 480
+        "minHeight": 580
       }
     ]
   }
