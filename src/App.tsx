@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { exit, relaunch } from "@tauri-apps/plugin-process";
 import {
   check,
@@ -147,6 +146,135 @@ function ThemeToggle({
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.2 15.3A8.6 8.6 0 0 1 8.7 3.8 8.8 8.8 0 1 0 20.2 15.3Z" /></svg>
       )}
     </button>
+  );
+}
+
+function HomeVersionBadge() {
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [state, setState] = useState<
+    "idle" | "checking" | "available" | "downloading" | "installing" | "latest" | "error"
+  >("idle");
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState("");
+  const checkInFlight = useRef(false);
+
+  const checkForUpdates = async (openDialog: boolean) => {
+    if (checkInFlight.current) {
+      if (openDialog) {
+        setDialogOpen(true);
+        setState("checking");
+      }
+      return;
+    }
+    checkInFlight.current = true;
+    if (openDialog) {
+      setDialogOpen(true);
+      setState("checking");
+      setError("");
+    }
+    try {
+      const update = await check({ timeout: 15_000 });
+      setAvailableUpdate(update);
+      if (openDialog) setState(update ? "available" : "latest");
+      else if (update) setState("available");
+    } catch (checkError) {
+      if (openDialog) {
+        setState("error");
+        setError(formatErrorMessage(checkError));
+      }
+    } finally {
+      checkInFlight.current = false;
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void checkForUpdates(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const openUpdate = () => {
+    if (availableUpdate) {
+      setDialogOpen(true);
+      setState("available");
+    } else {
+      void checkForUpdates(true);
+    }
+  };
+  const closeDialog = async () => {
+    if (state === "downloading" || state === "installing") return;
+    setDialogOpen(false);
+    if (!availableUpdate) setState("idle");
+  };
+  const installUpdate = async () => {
+    if (!availableUpdate) return;
+    setState("downloading");
+    setProgress(0);
+    let downloaded = 0;
+    let total = 0;
+    try {
+      await availableUpdate.downloadAndInstall((event: DownloadEvent) => {
+        if (event.event === "Started") total = event.data.contentLength ?? 0;
+        else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (total > 0) setProgress(Math.min(100, (downloaded / total) * 100));
+        } else if (event.event === "Finished") setProgress(100);
+      });
+      setState("installing");
+      await relaunch();
+    } catch (installError) {
+      setState("error");
+      setError(formatErrorMessage(installError));
+    }
+  };
+
+  return (
+    <>
+      <button
+        className="brand-version-button"
+        onClick={openUpdate}
+        title={availableUpdate ? "发现新版本 " + availableUpdate.version + "，点击更新" : "检查更新"}
+        type="button"
+      >
+        v{appPackage.version}
+        {availableUpdate && <span className="update-available-dot" aria-label="有新版本可更新" />}
+      </button>
+      {dialogOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="update-dialog" role="dialog" aria-modal="true" aria-labelledby="home-update-title">
+            <h2 id="home-update-title">
+              {state === "latest" ? "当前已是最新版本" : state === "error" ? "更新失败" : availableUpdate ? "发现 GoTap " + availableUpdate.version : "检查 GoTap 更新"}
+            </h2>
+            {state === "checking" && <p>正在连接更新服务，请稍候…</p>}
+            {state === "latest" && <p>当前版本 v{appPackage.version} 暂无新版本。</p>}
+            {state === "error" && <p>{error || "暂时无法获取更新信息，请稍后重试。"}</p>}
+            {availableUpdate && state !== "error" && state !== "checking" && (
+              <>
+                <p className="update-notes">{availableUpdate.body || "本次更新包含稳定性和体验改进。"}</p>
+                {(state === "downloading" || state === "installing") && (
+                  <div className="update-progress" aria-label={"已下载 " + Math.round(progress) + "%"}>
+                    <span style={{ width: progress + "%" }} />
+                  </div>
+                )}
+                {state === "downloading" && <small>正在下载更新… {Math.round(progress)}%</small>}
+                {state === "installing" && <small>正在安装并重启 GoTap…</small>}
+              </>
+            )}
+            <div className="confirm-actions">
+              {state !== "downloading" && state !== "installing" && (
+                <Button className="hero-button" onPress={() => void closeDialog()} size="sm" variant="light">关闭</Button>
+              )}
+              {state === "available" && (
+                <Button className="hero-button" color="primary" onPress={() => void installUpdate()} size="sm">下载并更新</Button>
+              )}
+              {state === "error" && (
+                <Button className="hero-button" color="primary" onPress={() => void checkForUpdates(true)} size="sm">重试</Button>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 interface ClickerStatus {
@@ -1884,38 +2012,18 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
 function ModuleHome({
   session,
   modules,
+  onSelect,
   isDark,
   onToggleTheme,
   onLogout,
 }: {
   session: AuthSession;
   modules: Awaited<ReturnType<typeof getFeatureModules>>;
+  onSelect: (moduleKey: string) => void;
   isDark: boolean;
   onToggleTheme: () => void;
   onLogout: () => void;
 }) {
-  const openModule = async (moduleKey: string) => {
-    const label = `module-${moduleKey.replace(/[^a-zA-Z0-9:_/-]/g, "-")}`;
-    const existing = await WebviewWindow.getByLabel(label);
-    if (existing) {
-      await existing.show();
-      await existing.setFocus();
-      return;
-    }
-    const moduleWindow = new WebviewWindow(label, {
-      title: `GoTap · ${modules.find((module) => module.module_key === moduleKey)?.name ?? "功能模块"}`,
-      url: `index.html?module=${encodeURIComponent(moduleKey)}`,
-      width: 900,
-      height: 506,
-      minWidth: 900,
-      minHeight: 506,
-      center: true,
-      resizable: true,
-    });
-    moduleWindow.once("tauri://error", (event) => {
-      console.error("打开功能模块窗口失败", event);
-    });
-  };
   const iconFor = (icon: string) => {
     const icons: Record<string, string> = {
       ThunderboltOutlined: "⚡",
@@ -1934,7 +2042,13 @@ function ModuleHome({
       <header className="topbar module-topbar">
         <div className="brand">
           <div className="brand-mark"><CursorLogo /></div>
-          <div><strong>GoTap</strong><small className="brand-subtitle">功能中心</small></div>
+          <div>
+            <div className="brand-title">
+              <strong>GoTap</strong>
+              <HomeVersionBadge />
+            </div>
+            <small className="brand-subtitle">功能中心</small>
+          </div>
         </div>
         <div className="module-account">
           <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
@@ -1948,7 +2062,7 @@ function ModuleHome({
         {modules.length ? (
           <div className="module-grid">
             {modules.map((module) => (
-              <button className="module-tile" key={module.module_key} onClick={() => void openModule(module.module_key)}>
+              <button className="module-tile" key={module.module_key} onClick={() => onSelect(module.module_key)}>
                 <span className="module-card-top"><span className="module-icon">{iconFor(module.icon)}</span><span className="module-card-arrow" aria-hidden="true">↗</span></span>
                 <strong>{module.name}</strong>
                 <span className="module-description">{module.description || "打开模块开始使用"}</span>
@@ -1972,9 +2086,7 @@ function AuthenticatedApp() {
   const [authReady, setAuthReady] = useState(false);
   const [modules, setModules] = useState<Awaited<ReturnType<typeof getFeatureModules>>>([]);
   const [modulesLoaded, setModulesLoaded] = useState(false);
-  const [selectedModule, setSelectedModule] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get("module"),
-  );
+  const [selectedModule, setSelectedModule] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     const storedSession = getSession();
@@ -2046,11 +2158,7 @@ function AuthenticatedApp() {
   }
   if (!modulesLoaded) return null;
   const returnToModuleHome = () => {
-    if (new URLSearchParams(window.location.search).has("module")) {
-      void getCurrentWindow().destroy();
-    } else {
-      setSelectedModule(null);
-    }
+    setSelectedModule(null);
   };
   const activeModule = modules.find((module) => module.module_key === selectedModule);
   return activeModule ? (
@@ -2072,6 +2180,7 @@ function AuthenticatedApp() {
     <ModuleHome
       session={session}
       modules={modules}
+      onSelect={setSelectedModule}
       isDark={isDark}
       onToggleTheme={toggleTheme}
       onLogout={() => {
