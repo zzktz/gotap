@@ -455,21 +455,12 @@ function AuthPage({
         </div>
         <div className="auth-visual-copy">
           <p className="eyebrow">轻松开始</p>
-          <h2>把重复操作，<br />交给 GoTap。</h2>
+          <h2>把重复操作，交给 GoTap。</h2>
           <p>简单、可靠的桌面工具，让日常工作更从容。</p>
         </div>
         <span className="auth-visual-footer">专注当下 · 高效每一步</span>
       </aside>
       <section className="auth-panel">
-        <div className="auth-brand">
-          <div className="brand-mark auth-brand-mark">
-            <CursorLogo />
-          </div>
-          <div>
-            <h1>GoTap</h1>
-            <p>轻量、可靠的桌面自动点击器</p>
-          </div>
-        </div>
         <section className="card auth-card">
           <p className="eyebrow">
             {mode === "login"
