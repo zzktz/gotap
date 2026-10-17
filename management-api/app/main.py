@@ -10,7 +10,6 @@ import secrets
 import smtplib
 import shutil
 import sqlite3
-import threading
 import urllib.error
 import urllib.request
 from email.message import EmailMessage
@@ -27,76 +26,90 @@ from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPExcepti
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, EmailStr, Field
 
-
-APP_NAME = os.getenv("APP_NAME", "GoTap Management API")
-JWT_SECRET = os.getenv("JWT_SECRET", "")
-if len(JWT_SECRET) < 32:
-    raise RuntimeError("JWT_SECRET must be at least 32 characters")
-_configured_db_path = os.getenv("DB_PATH")
-if _configured_db_path:
-    DB_PATH = Path(_configured_db_path)
-else:
-    _gotap_db_path = Path("/data/gotap.sqlite3")
-    _legacy_db_path = Path("/data/goyou.sqlite3")
-    # Keep existing deployments on their original database until an explicit
-    # Keep an existing GoYou database only when no explicit path is supplied.
-    DB_PATH = _legacy_db_path if _legacy_db_path.exists() and not _gotap_db_path.exists() else _gotap_db_path
-DB_BACKUP_DIR = Path(os.getenv("DB_BACKUP_DIR", str(DB_PATH.parent / "backups")))
-USAGE_REPORT_RETENTION_DAYS = max(1, int(os.getenv("USAGE_REPORT_RETENTION_DAYS", "90")))
-DB_BACKUP_INTERVAL_SECONDS = max(3600, int(os.getenv("DB_BACKUP_INTERVAL_SECONDS", str(24 * 3600))))
-DB_BACKUP_RETENTION_DAYS = max(1, int(os.getenv("DB_BACKUP_RETENTION_DAYS", "7")))
-DB_BUSY_TIMEOUT_MS = max(1000, int(os.getenv("DB_BUSY_TIMEOUT_MS", "5000")))
-ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "240"))
-REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "30"))
-RELAY_HOST = os.getenv("RELAY_HOST", "relay.123371.com")
-RELAY_PORT = int(os.getenv("RELAY_PORT", "24443"))
-RELAY_PORT_START = int(os.getenv("RELAY_PORT_START", "30000"))
-RELAY_PORT_END = int(os.getenv("RELAY_PORT_END", "39999"))
-RELAY_METHOD = os.getenv("RELAY_METHOD", "chacha20-ietf-poly1305")
-RELAY_PASSWORD = os.getenv("RELAY_PASSWORD", "")
-DEFAULT_RELAY_ID = "default"
-RELAY_HEARTBEAT_TIMEOUT_SECONDS = max(
-    10, min(int(os.getenv("RELAY_HEARTBEAT_TIMEOUT_SECONDS", "30")), 300)
+from .config import (
+    ACCESS_TOKEN_MINUTES,
+    ADMIN_EMAIL,
+    ADMIN_EMAIL_SETTING_KEY,
+    ADMIN_NAME,
+    ADMIN_NAME_SETTING_KEY,
+    ADMIN_PASSWORD,
+    ADMIN_PASSWORD_HASH,
+    ADMIN_PASSWORD_HASH_SETTING_KEY,
+    APP_NAME,
+    DB_BACKUP_RETENTION_DAYS,
+    DB_BUSY_TIMEOUT_MS,
+    DB_PATH,
+    DEFAULT_ACCOUNT_VALID_DAYS,
+    DEFAULT_ACCOUNT_VALID_DAYS_SETTING_KEY,
+    DEFAULT_DAILY_QUOTA_BYTES,
+    DEFAULT_RELAY_ID,
+    FEEDBACK_MAX_IMAGE_BYTES,
+    FEEDBACK_STORAGE_DIR,
+    GITHUB_PROXY_URL,
+    JWT_SECRET,
+    METERING_TOKEN,
+    MONTHLY_TRAFFIC_QUOTA_BYTES,
+    QUOTA_TIMEZONE,
+    REFRESH_TOKEN_DAYS,
+    REGISTRATION_SETTING_KEY,
+    RELAY_HEARTBEAT_TIMEOUT_SECONDS,
+    RELAY_HOST,
+    RELAY_METHOD,
+    RELAY_PASSWORD,
+    RELAY_PORT,
+    RELAY_PORT_END,
+    RELAY_PORT_START,
+    RELEASE_RETENTION_COUNT,
+    SMTP_FROM,
+    SMTP_HOST,
+    SMTP_PASSWORD,
+    SMTP_PORT,
+    SMTP_STARTTLS,
+    SMTP_USE_SSL,
+    SMTP_USERNAME,
+    UPDATE_GITHUB_REPOSITORY,
+    UPDATE_MAX_ASSET_BYTES,
+    UPDATE_PLATFORMS,
+    UPDATE_PUBLIC_BASE_URL,
+    UPDATE_STORAGE_DIR,
+    USAGE_REPORT_RETENTION_DAYS,
+    VERIFICATION_CODE_COOLDOWN_SECONDS,
+    VERIFICATION_CODE_EXPIRE_MINUTES,
+    VERIFICATION_CODE_MAX_ATTEMPTS,
 )
-DEFAULT_DAILY_QUOTA_BYTES = int(os.getenv("DEFAULT_DAILY_QUOTA_BYTES", "1000000000"))
-DEFAULT_ACCOUNT_VALID_DAYS = int(os.getenv("DEFAULT_ACCOUNT_VALID_DAYS", "365"))
-QUOTA_TIMEZONE = os.getenv("QUOTA_TIMEZONE", "Asia/Shanghai")
-MONTHLY_TRAFFIC_QUOTA_BYTES = 1_000_000_000_000
-METERING_TOKEN = os.getenv("METERING_TOKEN", "").strip()
-UPDATE_GITHUB_REPOSITORY = os.getenv("UPDATE_GITHUB_REPOSITORY", "zzktz/gotap").strip()
-# Optional HTTP CONNECT proxy used for GitHub API and release asset traffic.
-# Production points this at the shared goyou-github-proxy bridge listener;
-# local development remains direct when the variable is unset.
-GITHUB_PROXY_URL = os.getenv("GITHUB_PROXY_URL", "").strip()
-UPDATE_STORAGE_DIR = Path(os.getenv("UPDATE_STORAGE_DIR", str(DB_PATH.parent / "updates")))
-UPDATE_MAX_ASSET_BYTES = int(os.getenv("UPDATE_MAX_ASSET_BYTES", "2000000000"))
-RELEASE_RETENTION_COUNT = 3
-FEEDBACK_STORAGE_DIR = Path(os.getenv("FEEDBACK_STORAGE_DIR", str(DB_PATH.parent / "feedback")))
-FEEDBACK_MAX_IMAGES = 3
-FEEDBACK_MAX_IMAGE_BYTES = 5 * 1024 * 1024
-UPDATE_PLATFORMS = ("windows-x86_64", "darwin-aarch64", "darwin-x86_64")
-UPDATE_PUBLIC_BASE_URL = os.getenv("UPDATE_PUBLIC_BASE_URL", "https://gotap.123371.com").rstrip("/")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip().lower()
-ADMIN_NAME = os.getenv("ADMIN_NAME", "GoTap 管理员").strip() or "GoTap 管理员"
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
-SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME or "").strip()
-SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "0").strip().lower() in {"1", "true", "yes"}
-SMTP_STARTTLS = os.getenv("SMTP_STARTTLS", "1").strip().lower() in {"1", "true", "yes"}
-VERIFICATION_CODE_EXPIRE_MINUTES = 10
-VERIFICATION_CODE_COOLDOWN_SECONDS = 60
-VERIFICATION_CODE_MAX_ATTEMPTS = 5
+from .schemas import (
+    AdminAccountExpiryRequest,
+    AdminCreateUserRequest,
+    AdminFeedbackReplyRequest,
+    AdminLoginRequest,
+    AdminProfileUpdateRequest,
+    AdminQuotaRequest,
+    AdminRelayCreateRequest,
+    AdminRelayUpdateRequest,
+    AdminReleaseCreateRequest,
+    AdminReleaseImportRequest,
+    AdminReleaseUpdateRequest,
+    AdminSettingsUpdateRequest,
+    AdminUserStatusRequest,
+    DeviceRequest,
+    FeedbackCreateRequest,
+    FeedbackScreenshotRequest,
+    LeaseRefreshRequest,
+    LeaseRequest,
+    LoginRequest,
+    PasswordResetRequest,
+    ProfileUpdateRequest,
+    RefreshRequest,
+    RegisterRequest,
+    RelayHeartbeatRequest,
+    SendVerificationCodeRequest,
+    UsageReportRequest,
+)
+
 password_hasher = PasswordHasher()
 bearer = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
-_maintenance_stop = threading.Event()
-_maintenance_thread: threading.Thread | None = None
 
 # Use the dedicated GitHub proxy when configured.  A custom opener keeps
 # these requests isolated from unrelated process-wide proxy settings.
@@ -304,96 +317,6 @@ def db() -> sqlite3.Connection:
     return connection
 
 
-def _backup_files() -> list[Path]:
-    if not DB_BACKUP_DIR.exists():
-        return []
-    files: list[tuple[float, Path]] = []
-    for path in DB_BACKUP_DIR.glob(f"{DB_PATH.name}.backup-*.sqlite3"):
-        try:
-            files.append((path.stat().st_mtime, path))
-        except OSError:
-            continue
-    return [path for _, path in sorted(files, reverse=True)]
-
-
-def _prune_old_backups() -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=DB_BACKUP_RETENTION_DAYS)
-    for path in _backup_files():
-        try:
-            modified_at = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
-            if modified_at < cutoff:
-                path.unlink(missing_ok=True)
-        except OSError:
-            logger.warning("无法清理旧数据库备份: %s", path, exc_info=True)
-
-
-def online_database_backup() -> Path:
-    """Create a consistent backup without copying the live database file."""
-    DB_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    destination = DB_BACKUP_DIR / f"{DB_PATH.name}.backup-{stamp}.sqlite3"
-    temporary = DB_BACKUP_DIR / f".{destination.name}.tmp"
-    source_connection = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_MS / 1000)
-    backup_connection = sqlite3.connect(temporary)
-    try:
-        source_connection.execute(f"PRAGMA busy_timeout = {DB_BUSY_TIMEOUT_MS}")
-        source_connection.backup(backup_connection, pages=1000, sleep=0.05)
-        backup_connection.commit()
-    except Exception:
-        temporary.unlink(missing_ok=True)
-        raise
-    finally:
-        backup_connection.close()
-        source_connection.close()
-    temporary.replace(destination)
-    _prune_old_backups()
-    return destination
-
-
-def database_maintenance_once() -> None:
-    cutoff = iso(now() - timedelta(days=USAGE_REPORT_RETENTION_DAYS))
-    with db() as connection:
-        deleted = connection.execute(
-            "DELETE FROM usage_reports WHERE reported_at < ?", (cutoff,)
-        ).rowcount
-        release_cleanup = _prune_old_releases(connection)
-        connection.execute("PRAGMA optimize")
-    _remove_release_files(release_cleanup)
-    backup = online_database_backup()
-    logger.info(
-        "数据库维护完成：清理 %s 条流量明细、%s 个旧版本，在线备份 %s",
-        max(deleted, 0),
-        len(release_cleanup),
-        backup,
-    )
-
-
-def _database_maintenance_loop() -> None:
-    while not _maintenance_stop.is_set():
-        try:
-            database_maintenance_once()
-        except Exception:
-            logger.exception("数据库维护失败")
-        if _maintenance_stop.wait(DB_BACKUP_INTERVAL_SECONDS):
-            break
-
-
-def latest_database_backup() -> dict[str, object] | None:
-    backups = _backup_files()
-    if not backups:
-        return None
-    path = backups[0]
-    try:
-        stat = path.stat()
-    except OSError:
-        return None
-    return {
-        "filename": path.name,
-        "size_bytes": stat.st_size,
-        "created_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-    }
-
-
 def database_stats_payload(connection: sqlite3.Connection) -> dict[str, object]:
     database_stat = DB_PATH.stat()
     wal_path = Path(f"{DB_PATH}-wal")
@@ -418,15 +341,8 @@ def database_stats_payload(connection: sqlite3.Connection) -> dict[str, object]:
         "journal_mode": str(journal_mode).lower(),
         "busy_timeout_ms": int(busy_timeout),
         "backup_retention_days": DB_BACKUP_RETENTION_DAYS,
-        "backup": latest_database_backup(),
+        "backup": maintenance.latest_database_backup(),
     }
-
-
-REGISTRATION_SETTING_KEY = "registration_enabled"
-DEFAULT_ACCOUNT_VALID_DAYS_SETTING_KEY = "default_account_valid_days"
-ADMIN_EMAIL_SETTING_KEY = "admin_email"
-ADMIN_NAME_SETTING_KEY = "admin_name"
-ADMIN_PASSWORD_HASH_SETTING_KEY = "admin_password_hash"
 
 
 def system_setting_bool(connection: sqlite3.Connection, key: str, default: bool) -> bool:
@@ -1030,158 +946,6 @@ def init_db() -> None:
         )
 
 
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    verification_code: str = Field(pattern=r"^\d{6}$")
-    password: str = Field(min_length=8, max_length=128)
-    name: str = Field(default="", max_length=10, pattern=r"^[A-Za-z\u4e00-\u9fff]*$")
-
-
-class SendVerificationCodeRequest(BaseModel):
-    email: EmailStr
-
-
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
-    verification_code: str = Field(pattern=r"^\d{6}$")
-    password: str = Field(min_length=8, max_length=128)
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=1, max_length=128)
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str = Field(min_length=20)
-
-
-class ProfileUpdateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-
-
-class DeviceRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    platform: str = Field(default="desktop", max_length=40)
-
-
-class LeaseRequest(BaseModel):
-    device_id: str | None = Field(default=None, max_length=100)
-
-
-class LeaseRefreshRequest(BaseModel):
-    lease_id: str = Field(min_length=8, max_length=100)
-
-
-class FeedbackScreenshotRequest(BaseModel):
-    filename: str = Field(default="screenshot", max_length=255)
-    data: str = Field(min_length=1, max_length=7_000_000)
-
-
-class FeedbackCreateRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=5000)
-    screenshots: list[FeedbackScreenshotRequest] = Field(default_factory=list, max_length=FEEDBACK_MAX_IMAGES)
-
-
-class AdminFeedbackReplyRequest(BaseModel):
-    reply: str = Field(min_length=1, max_length=5000)
-
-
-class AdminLoginRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=1, max_length=128)
-
-
-class AdminSettingsUpdateRequest(BaseModel):
-    registration_enabled: bool | None = None
-    default_account_valid_days: int | None = Field(default=None, ge=0, le=3650)
-
-
-class AdminProfileUpdateRequest(BaseModel):
-    current_password: str = Field(min_length=1, max_length=128)
-    email: EmailStr | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=80)
-    new_password: str | None = Field(default=None, min_length=8, max_length=128)
-
-
-class AdminUserStatusRequest(BaseModel):
-    enabled: bool
-
-
-class AdminCreateUserRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
-    name: str = Field(default="", max_length=80)
-    account_expires_at: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
-    daily_limit_bytes: int = Field(default=DEFAULT_DAILY_QUOTA_BYTES, ge=0, le=10_000_000_000_000)
-
-
-class AdminQuotaRequest(BaseModel):
-    daily_limit_bytes: int = Field(ge=0, le=10_000_000_000_000)
-
-
-class AdminAccountExpiryRequest(BaseModel):
-    account_expires_at: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
-
-
-class AdminRelayCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    host: str = Field(min_length=1, max_length=255)
-    port_start: int = Field(default=30000, ge=1, le=65535)
-    port_end: int = Field(default=39999, ge=1, le=65535)
-    method: str = Field(default=RELAY_METHOD, min_length=1, max_length=100)
-    legacy_port: int = Field(default=0, ge=0, le=65535)
-    region: str = Field(default="", max_length=80)
-    weight: int = Field(default=100, ge=1, le=1000)
-    enabled: bool = True
-
-
-class AdminRelayUpdateRequest(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=100)
-    host: str | None = Field(default=None, min_length=1, max_length=255)
-    port_start: int | None = Field(default=None, ge=1, le=65535)
-    port_end: int | None = Field(default=None, ge=1, le=65535)
-    method: str | None = Field(default=None, min_length=1, max_length=100)
-    legacy_port: int | None = Field(default=None, ge=0, le=65535)
-    region: str | None = Field(default=None, max_length=80)
-    weight: int | None = Field(default=None, ge=1, le=1000)
-    enabled: bool | None = None
-    draining: bool | None = None
-    regenerate_token: bool = False
-
-
-class AdminReleaseCreateRequest(BaseModel):
-    version: str = Field(pattern=r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$", max_length=64)
-    notes: str = Field(default="", max_length=10000)
-
-
-class AdminReleaseUpdateRequest(BaseModel):
-    notes: str = Field(default="", max_length=10000)
-
-
-class AdminReleaseImportRequest(BaseModel):
-    notes: str | None = Field(default=None, max_length=10000)
-
-
-class UsageReportRequest(BaseModel):
-    report_id: str = Field(min_length=8, max_length=200)
-    user_id: str = Field(min_length=1, max_length=100)
-    lease_id: str | None = Field(default=None, max_length=100)
-    connection_id: str | None = Field(default=None, max_length=200)
-    target_host: str | None = Field(default=None, max_length=255)
-    target_port: int | None = Field(default=None, ge=1, le=65535)
-    upload_bytes: int = Field(default=0, ge=0, le=10_000_000_000_000)
-    download_bytes: int = Field(default=0, ge=0, le=10_000_000_000_000)
-
-
-class RelayHeartbeatRequest(BaseModel):
-    process_running: bool
-    listen_ports: list[int] = Field(default_factory=list, max_length=20_000)
-    duplicate_ports: list[int] = Field(default_factory=list, max_length=20_000)
-    lease_count: int = Field(default=0, ge=0, le=20_000)
-    error: str | None = Field(default=None, max_length=2000)
-
-
 def public_user(row: sqlite3.Row) -> dict[str, str]:
     return {
         "id": row["id"],
@@ -1387,22 +1151,13 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=Fals
 
 @app.on_event("startup")
 def startup() -> None:
-    global _maintenance_thread
     init_db()
-    _maintenance_stop.clear()
-    _maintenance_thread = threading.Thread(
-        target=_database_maintenance_loop,
-        name="database-maintenance",
-        daemon=True,
-    )
-    _maintenance_thread.start()
+    maintenance.start()
 
 
 @app.on_event("shutdown")
 def shutdown() -> None:
-    _maintenance_stop.set()
-    if _maintenance_thread and _maintenance_thread.is_alive():
-        _maintenance_thread.join(timeout=5)
+    maintenance.stop()
 
 
 @app.get("/healthz")
@@ -3271,3 +3026,7 @@ def admin_revoke_lease(lease_id: str, admin: Annotated[dict[str, str], Depends(c
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="租约不存在")
         row = connection.execute("SELECT id, user_id, expires_at, revoked_at FROM leases WHERE id = ?", (lease_id,)).fetchone()
     return {"id": row["id"], "user_id": row["user_id"], "expires_at": row["expires_at"], "revoked_at": row["revoked_at"], "state": lease_state(row)}
+
+
+# 维护任务独立于应用路由，避免主模块继续承载后台线程实现。
+from . import maintenance  # noqa: E402  # 需要在公共函数定义完成后再导入
