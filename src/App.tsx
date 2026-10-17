@@ -2032,8 +2032,11 @@ function DocumentConverterPage({
 
   const loadJobs = async () => {
     try {
-      const result = await authenticatedRequest<{ items: DocumentConversionJob[] }>("/v1/conversions");
+      const result = await authenticatedRequest<{ items: DocumentConversionJob[] }>("/v1/conversions", {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
       setJobs(result.items);
+      setError("");
     } catch (loadError) {
       setError(formatErrorMessage(loadError));
     }
@@ -2146,7 +2149,7 @@ function DocumentConverterPage({
         </div>
         <p className="document-quality-note">PDF 转 Word 或 PowerPoint 时，原文档布局可能无法完整还原，转换结果建议人工校对；扫描版 PDF 可能需要 OCR。</p>
         {error && <p className="error document-error" role="alert">{error}</p>}
-        <div className="document-history-heading"><h2>转换记录</h2><Button className="hero-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
+        <div className="document-history-heading"><h2>转换记录</h2><Button className="hero-button document-refresh-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
         {jobs.length ? (
           <div className="document-job-list">
             {jobs.map((job) => (
