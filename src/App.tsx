@@ -1860,10 +1860,12 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
 }
 
 function ModuleHome({
+  session,
   modules,
   onSelect,
   onLogout,
 }: {
+  session: AuthSession;
   modules: Awaited<ReturnType<typeof getFeatureModules>>;
   onSelect: (moduleKey: string) => void;
   onLogout: () => void;
@@ -1883,25 +1885,35 @@ function ModuleHome({
   };
   return (
     <main className="app-shell module-shell">
-      <header className="topbar">
+      <header className="topbar module-topbar">
         <div className="brand">
           <div className="brand-mark"><CursorLogo /></div>
           <div><strong>GoTap</strong><small className="brand-subtitle">功能中心</small></div>
         </div>
-        <Button className="hero-button" size="sm" variant="light" onPress={onLogout}>退出登录</Button>
+        <div className="module-account">
+          <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
+          <span className="module-account-email">{session.user.email}</span>
+          <Button className="hero-button" size="sm" variant="light" onPress={onLogout}>退出</Button>
+        </div>
       </header>
       <section className="module-home">
-        <p className="eyebrow">GoTap Workspace</p>
-        <h1>选择一个功能模块</h1>
-        <p className="module-intro">你的桌面工具，整合在一个轻巧的工作空间里。</p>
+        <div className="module-welcome">
+          <div>
+            <p className="eyebrow">GOTAP WORKSPACE</p>
+            <h1>今天，想用什么工具？</h1>
+            <p className="module-intro">常用桌面功能，一站开启。</p>
+          </div>
+          <div className="module-count"><strong>{modules.length.toString().padStart(2, "0")}</strong><span>个可用模块</span></div>
+        </div>
+        <div className="module-section-heading"><h2>功能模块</h2><span>选择卡片即可进入</span></div>
         {modules.length ? (
           <div className="module-grid">
             {modules.map((module) => (
               <button className="module-tile" key={module.module_key} onClick={() => onSelect(module.module_key)}>
-                <span className="module-icon">{iconFor(module.icon)}</span>
+                <span className="module-card-top"><span className="module-icon">{iconFor(module.icon)}</span><span className="module-card-arrow" aria-hidden="true">↗</span></span>
                 <strong>{module.name}</strong>
                 <span className="module-description">{module.description || "打开模块开始使用"}</span>
-                <span className="module-open">打开模块 <span aria-hidden="true">→</span></span>
+                <span className="module-open">立即使用 <span aria-hidden="true">→</span></span>
               </button>
             ))}
           </div>
@@ -2007,6 +2019,7 @@ function AuthenticatedApp() {
     )
   ) : (
     <ModuleHome
+      session={session}
       modules={modules}
       onSelect={setSelectedModule}
       onLogout={() => {
