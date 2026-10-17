@@ -11,7 +11,7 @@
   },
   "app": {
     "macOSPrivateApi": true,
-    "windows": [{ "label": "main", "title": "GoTap", "width": 450, "height": 590, "minWidth": 400, "minHeight": 550, "visible": false, "resizable": true, "center": true, "backgroundColor": "#edf3f8" }],
+    "windows": [{ "label": "main", "title": "GoTap", "width": 1280, "height": 720, "minWidth": 960, "minHeight": 540, "visible": false, "resizable": true, "center": true, "backgroundColor": "#edf3f8" }],
     "security": { "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://gotap.123371.com https://gotop.123371.com; style-src 'self' 'unsafe-inline'" }
   },
   "bundle": {

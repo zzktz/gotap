@@ -576,7 +576,7 @@ function AuthPage({
   );
 }
 
-function ClickerPage({ onLogout }: { onLogout: () => void }) {
+function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () => void }) {
   const [profile, setProfile] = useState<ClickProfile>(DEFAULT_PROFILE);
   const [status, setStatus] = useState<ClickerStatus>({
     state: "idle",
@@ -1181,6 +1181,9 @@ function ClickerPage({ onLogout }: { onLogout: () => void }) {
           </div>
         </div>
         <div className="topbar-actions">
+          <Button className="hero-button" size="sm" variant="light" onPress={onBack}>
+            模块列表
+          </Button>
           <div className="about-menu-wrap" ref={aboutMenuRef}>
             <Button
               aria-label="打开帮助与反馈菜单"
@@ -1805,12 +1808,68 @@ function ClickerPage({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+function ModuleHome({
+  modules,
+  onSelect,
+  onLogout,
+}: {
+  modules: Awaited<ReturnType<typeof getFeatureModules>>;
+  onSelect: (moduleKey: string) => void;
+  onLogout: () => void;
+}) {
+  const iconFor = (icon: string) => {
+    const icons: Record<string, string> = {
+      ThunderboltOutlined: "⚡",
+      AppstoreOutlined: "▦",
+      ToolOutlined: "🛠",
+      RocketOutlined: "🚀",
+      SettingOutlined: "⚙",
+      MonitorOutlined: "▣",
+      CloudOutlined: "☁",
+      SafetyOutlined: "◈",
+    };
+    return icons[icon] ?? "▦";
+  };
+  return (
+    <main className="app-shell module-shell">
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-mark"><CursorLogo /></div>
+          <div><strong>GoTap</strong><small className="brand-subtitle">功能中心</small></div>
+        </div>
+        <Button className="hero-button" size="sm" variant="light" onPress={onLogout}>退出登录</Button>
+      </header>
+      <section className="module-home">
+        <p className="eyebrow">GoTap Workspace</p>
+        <h1>选择一个功能模块</h1>
+        <p className="module-intro">你的桌面工具，整合在一个轻巧的工作空间里。</p>
+        {modules.length ? (
+          <div className="module-grid">
+            {modules.map((module) => (
+              <button className="module-tile" key={module.module_key} onClick={() => onSelect(module.module_key)}>
+                <span className="module-icon">{iconFor(module.icon)}</span>
+                <strong>{module.name}</strong>
+                <span className="module-description">{module.description || "打开模块开始使用"}</span>
+                <span className="module-open">打开模块 <span aria-hidden="true">→</span></span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="module-empty card">暂时没有已启用的功能模块。</div>
+        )}
+      </section>
+    </main>
+  );
+}
+
 function AuthenticatedApp() {
   const [session, setSession] = useState<AuthSession | null>(() =>
     getSession(),
   );
   const [authReady, setAuthReady] = useState(false);
-  const [clickerEnabled, setClickerEnabled] = useState(true);
+  const [modules, setModules] = useState<Awaited<ReturnType<typeof getFeatureModules>>>([]);
+  const [modulesLoaded, setModulesLoaded] = useState(false);
+  const [selectedModule, setSelectedModule] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     const storedSession = getSession();
@@ -1855,10 +1914,14 @@ function AuthenticatedApp() {
     let active = true;
     void getFeatureModules()
       .then((modules) => {
-        if (active) setClickerEnabled(modules.some((module) => module.module_key === "clicker"));
+        if (active) {
+          setModules(modules);
+          setModulesLoaded(true);
+        }
       })
       .catch(() => {
-        // 模块服务暂时不可用时不影响本地点击功能。
+        // 读取失败时显示空模块列表，不绕过后台的模块开关。
+        if (active) setModulesLoaded(true);
       });
     return () => {
       active = false;
@@ -1874,32 +1937,32 @@ function AuthenticatedApp() {
       />
     );
   }
-  return (
-    clickerEnabled ? (
+  if (!modulesLoaded) return null;
+  const activeModule = modules.find((module) => module.module_key === selectedModule);
+  return activeModule ? (
+    activeModule.module_key === "clicker" ? (
       <ClickerPage
         onLogout={() => {
           void logout();
           setSession(null);
         }}
+        onBack={() => setSelectedModule(null)}
       />
     ) : (
-      <main className="auth-shell">
-        <section className="card auth-card">
-          <p className="eyebrow">功能暂不可用</p>
-          <h2>自动点击器已关闭</h2>
-          <p>此功能目前由管理员关闭，请稍后再试或联系管理员。</p>
-          <Button
-            className="hero-button auth-submit"
-            onPress={() => {
-              void logout();
-              setSession(null);
-            }}
-          >
-            退出登录
-          </Button>
-        </section>
+      <main className="app-shell module-shell">
+        <header className="topbar"><Button className="hero-button" onPress={() => setSelectedModule(null)}>← 模块列表</Button><strong>{activeModule.name}</strong></header>
+        <section className="module-placeholder card"><p className="eyebrow">{activeModule.module_key}</p><h1>{activeModule.name}</h1><p>模块入口已就绪，具体功能将在后续版本接入。</p></section>
       </main>
     )
+  ) : (
+    <ModuleHome
+      modules={modules}
+      onSelect={setSelectedModule}
+      onLogout={() => {
+        void logout();
+        setSession(null);
+      }}
+    />
   );
 }
 

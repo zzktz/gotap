@@ -51,7 +51,7 @@ button:disabled {
   opacity: 0.55;
 }
 .app-shell {
-  min-height: 590px;
+  min-height: 100vh;
   background: #fff;
 }
 .topbar {
@@ -112,12 +112,90 @@ button:disabled {
   font-size: 12px;
 }
 .content {
-  width: min(100%, 680px);
+  width: min(100%, 1080px);
   margin: 0 auto;
   padding: 22px 26px 16px;
   display: grid;
   gap: 14px;
 }
+.module-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 78% 18%, #e7f3fc 0, transparent 34%),
+    linear-gradient(180deg, #f8fbfd 0%, #fff 70%);
+}
+.module-home {
+  width: min(100%, 1060px);
+  margin: 0 auto;
+  padding: clamp(42px, 8vh, 82px) 36px 54px;
+}
+.module-home h1 {
+  font-size: clamp(30px, 3.2vw, 42px);
+  letter-spacing: -0.055em;
+}
+.module-intro {
+  margin: 10px 0 34px;
+  color: #738396;
+  font-size: 15px;
+}
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+}
+.module-tile {
+  min-height: 214px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 24px;
+  border: 1px solid #e1e9ef;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 35px #193b5610;
+  color: #172b44;
+  text-align: left;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.module-tile:hover {
+  transform: translateY(-3px);
+  border-color: #8cb9d7;
+  box-shadow: 0 18px 42px #193b5618;
+}
+.module-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 20px;
+  border-radius: 14px;
+  background: #eaf4fb;
+  color: #1768a7;
+  font-size: 25px;
+}
+.module-tile strong { font-size: 17px; }
+.module-description {
+  margin-top: 8px;
+  color: #8795a3;
+  font-size: 12px;
+}
+.module-open {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 22px;
+  color: #2874a7;
+  font-size: 12px;
+  font-weight: 650;
+}
+.module-empty,
+.module-placeholder {
+  max-width: 680px;
+  margin-top: 28px;
+  padding: 30px;
+}
+.module-placeholder { margin: 70px auto; }
 .card {
   padding: 20px;
   border: 1px solid #dce4eb;
