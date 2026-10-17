@@ -723,6 +723,9 @@ h2 {
   background: #1768a7 !important;
   box-shadow: 0 5px 12px #1768a733;
 }
+.document-converter .primary-action-button:disabled {
+  opacity: 1;
+}
 .primary-action-button:hover:not(:disabled),
 .primary-action-button[data-hover="true"] {
   background: #11598f !important;
