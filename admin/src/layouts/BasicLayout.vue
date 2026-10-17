@@ -144,7 +144,6 @@ onBeforeUnmount(() => {
         <div class="header-actions">
           <a-badge :dot="updateAvailable" class="version-badge">
             <a-tag
-              color="blue"
               class="admin-version"
               aria-label="检查管理后台更新"
               @click="refreshForUpdate"

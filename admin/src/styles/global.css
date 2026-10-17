@@ -88,14 +88,20 @@ body {
 }
 .admin-version {
   margin: 0;
-  padding: 3px 10px;
-  border: 0;
-  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #f5f5f5;
+  color: #595959;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 18px;
   cursor: pointer;
   user-select: none;
+}
+.admin-version:hover {
+  border-color: #8c8c8c;
+  color: #434343;
 }
 .version-badge {
   display: inline-flex;
