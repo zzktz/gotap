@@ -573,7 +573,6 @@ function AuthPage({
             )}
           </div>
         </section>
-        <p className="auth-copyright">GoTap · 桌面工作空间</p>
       </section>
     </main>
   );
