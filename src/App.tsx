@@ -2024,6 +2024,25 @@ function ModuleHome({
   onToggleTheme: () => void;
   onLogout: () => void;
 }) {
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountMenuOpen]);
   const iconFor = (icon: string) => {
     const icons: Record<string, string> = {
       ThunderboltOutlined: "⚡",
@@ -2054,7 +2073,44 @@ function ModuleHome({
           <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
           <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
           <span className="module-account-email">{session.user.email}</span>
-          <Button className="hero-button" size="sm" variant="light" onPress={onLogout}>退出</Button>
+          <div className="about-menu-wrap" ref={accountMenuRef}>
+            <Button
+              aria-label="打开账户菜单"
+              aria-expanded={accountMenuOpen}
+              aria-haspopup="menu"
+              className="topbar-action"
+              onPress={() => setAccountMenuOpen((open) => !open)}
+              size="sm"
+              title="账户菜单"
+              variant="light"
+            >
+              <span className="help-icon" aria-hidden="true">?</span>
+            </Button>
+            {accountMenuOpen && (
+              <div className="about-menu" role="menu">
+                <button
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    onLogout();
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  返回
+                </button>
+                <button
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    void exit(0);
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  退出
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
       <section className="module-home">
