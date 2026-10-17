@@ -356,9 +356,16 @@ def database_maintenance_once() -> None:
         deleted = connection.execute(
             "DELETE FROM usage_reports WHERE reported_at < ?", (cutoff,)
         ).rowcount
+        release_cleanup = _prune_old_releases(connection)
         connection.execute("PRAGMA optimize")
+    _remove_release_files(release_cleanup)
     backup = online_database_backup()
-    logger.info("数据库维护完成：清理 %s 条流量明细，在线备份 %s", max(deleted, 0), backup)
+    logger.info(
+        "数据库维护完成：清理 %s 条流量明细、%s 个旧版本，在线备份 %s",
+        max(deleted, 0),
+        len(release_cleanup),
+        backup,
+    )
 
 
 def _database_maintenance_loop() -> None:
