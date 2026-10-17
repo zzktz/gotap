@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import logoUrl from "../logo.png";
 
 interface AppHeaderProps {
   subtitle: string;
@@ -10,22 +11,11 @@ interface AppHeaderProps {
 
 export function CursorLogo() {
   return (
-    <svg
+    <img
       aria-label="GoTap 鼠标箭头标志"
       className="cursor-logo"
-      role="img"
-      viewBox="0 0 1024 1024"
-    >
-      <rect width="1024" height="1024" fill="#1768a7" />
-      <path
-        d="M842 562 422 422l140 420 117-117 94 94 46-47-93-93 116-117Z"
-        fill="#fff"
-      />
-      <path
-        d="M248 743V248h495v213l66 22V182H182v627h301l-22-66H248Z"
-        fill="#fff"
-      />
-    </svg>
+      src={logoUrl}
+    />
   );
 }
 

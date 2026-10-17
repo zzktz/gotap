@@ -88,14 +88,13 @@ button:disabled {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  color: #fff;
-  background: #1768a7;
-  box-shadow: 0 6px 14px #1768a733;
+  background: transparent;
 }
 .cursor-logo {
   display: block;
-  width: 25px;
-  height: 25px;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 .account {
   display: flex;
@@ -1561,8 +1560,8 @@ html[data-theme="light"] { color-scheme: light; }
   box-shadow: 0 8px 18px #1768a740;
 }
 .auth-brand-mark .cursor-logo {
-  width: 34px;
-  height: 34px;
+  width: 48px;
+  height: 48px;
 }
 .auth-brand h1 {
   margin: 0 0 4px;
