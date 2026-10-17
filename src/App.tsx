@@ -458,6 +458,7 @@ function AuthPage({
           <span className="art-spark art-spark-one">✦</span>
           <span className="art-spark art-spark-two">✧</span>
         </div>
+        <p className="auth-visual-description">简单、可靠的桌面工具，让日常工作更从容。</p>
       </aside>
       <section className="auth-panel">
         <section className="card auth-card">
