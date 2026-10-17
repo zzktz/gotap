@@ -258,8 +258,8 @@ html[data-theme="dark"] .update-dialog h2 { color: #edf2f8; }
 html[data-theme="dark"] .update-dialog p { color: #b8c6d8; }
 html[data-theme="dark"] .update-dialog small { color: #aebbd0; }
 html[data-theme="dark"] .update-progress { background: #324b68; }
-html[data-theme="dark"] .update-dialog button[data-variant="light"] { color: #c2cede; }
-html[data-theme="dark"] .update-dialog button[data-variant="light"]:hover { color: #fff; background: #304967; }
+html[data-theme="dark"] .update-dialog .hero-button { color: #e5ebf4 !important; }
+html[data-theme="dark"] .update-dialog .hero-button[data-hover="true"] { color: #fff !important; background: #304967; }
 @media (max-width: 600px) {
   .module-topbar { padding: 12px 18px; }
   .module-account-email { display: none; }
