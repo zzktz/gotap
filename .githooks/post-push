@@ -25,10 +25,14 @@ if [ "$remote_name" != "$target_remote" ]; then
 fi
 
 should_deploy=0
+frontend_changed=0
 while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
     [ -n "$remote_ref" ] || continue
     if [ "$remote_ref" = "refs/heads/$target_branch" ] && [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
         should_deploy=1
+        if [ "$remote_sha" = "0000000000000000000000000000000000000000" ] || ! git diff --quiet "$remote_sha" "$local_sha" -- admin; then
+            frontend_changed=1
+        fi
         break
     fi
 done
@@ -59,7 +63,7 @@ quote_argument() {
     printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
 }
 
-remote_command="cd -- $(quote_argument "$GOTAP_DEPLOY_REPO_DIR") && $GOTAP_DEPLOY_UPDATE_COMMAND && $GOTAP_DEPLOY_RESTART_COMMAND"
+remote_command="cd -- $(quote_argument "$GOTAP_DEPLOY_REPO_DIR") && export GOTAP_BUILD_ADMIN=$frontend_changed && $GOTAP_DEPLOY_UPDATE_COMMAND && $GOTAP_DEPLOY_RESTART_COMMAND"
 ssh_target="$GOTAP_DEPLOY_SSH_USER@$GOTAP_DEPLOY_REMOTE_HOST"
 
 echo "已推送 $target_branch，开始部署生产管理 API……"

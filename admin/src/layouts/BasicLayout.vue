@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   AppstoreOutlined,
@@ -21,6 +21,13 @@ const router = useRouter();
 const auth = useAuthStore();
 const collapsed = ref(false);
 const settingsOpen = ref(false);
+const buildVersion = import.meta.env.VITE_ADMIN_VERSION || "0.1.1";
+const currentVersion = ref(buildVersion);
+const latestVersion = ref(buildVersion);
+const updateAvailable = computed(
+  () => latestVersion.value && latestVersion.value !== currentVersion.value,
+);
+let versionTimer;
 const active = computed(() =>
   route.path.startsWith("/profile")
     ? "/profile"
@@ -42,6 +49,41 @@ function logout() {
   auth.logout();
   router.replace("/login");
 }
+
+async function checkForUpdate(initial = false) {
+  try {
+    const response = await fetch(`/admin/assets/version.json?t=${Date.now()}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    const manifest = await response.json();
+    if (!manifest.version) return;
+    if (initial) currentVersion.value = manifest.version;
+    latestVersion.value = manifest.version;
+  } catch {
+    // 版本检查失败不影响管理后台的正常使用。
+  }
+}
+
+function refreshForUpdate() {
+  if (!updateAvailable.value) {
+    void checkForUpdate();
+    return;
+  }
+  const confirmed = window.confirm(
+    `发现管理后台新版本 v${latestVersion.value}，是否立即刷新页面？`,
+  );
+  if (confirmed) window.location.replace(`/admin/?更新=${Date.now()}`);
+}
+
+onMounted(() => {
+  void checkForUpdate(true);
+  versionTimer = window.setInterval(() => void checkForUpdate(), 60_000);
+});
+
+onBeforeUnmount(() => {
+  if (versionTimer) window.clearInterval(versionTimer);
+});
 </script>
 
 <template>
@@ -100,6 +142,16 @@ function logout() {
           >
         </div>
         <div class="header-actions">
+          <a-badge :dot="updateAvailable" class="version-badge">
+            <a-button
+              class="header-icon admin-version"
+              type="text"
+              aria-label="检查管理后台更新"
+              @click="refreshForUpdate"
+            >
+              v{{ currentVersion }}
+            </a-button>
+          </a-badge>
           <a-tooltip title="界面设置"
             ><a-button
               class="header-icon"
