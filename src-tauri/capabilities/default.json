@@ -5,6 +5,7 @@
   "windows": ["main", "selection", "selection-*"],
   "permissions": [
     "core:default",
+    "core:window:allow-set-theme",
     "process:allow-exit",
     "process:allow-restart",
     "global-shortcut:default",

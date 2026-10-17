@@ -110,6 +110,9 @@ function useThemePreference() {
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    void getCurrentWindow()
+      .setTheme(isDark ? "dark" : "light")
+      .catch(() => undefined);
   }, [isDark]);
   const toggleTheme = () => {
     const nextTheme = isDark ? "light" : "dark";
