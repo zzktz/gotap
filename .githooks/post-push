@@ -1,0 +1,86 @@
+#!/bin/sh
+
+# 推送 v2 成功后，通过 SSH 拉取生产代码并重启管理 API。
+set -u
+
+project_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$project_root" ]; then
+    echo "无法确定项目根目录，跳过生产部署。" >&2
+    exit 0
+fi
+
+local_config="$project_root/.githooks/deploy.local.sh"
+if [ -f "$local_config" ]; then
+    # 本地配置由部署人员维护，不能提交到仓库。
+    # shellcheck disable=SC1090
+    . "$local_config"
+fi
+
+remote_name=${1:-}
+target_remote=${GOTAP_DEPLOY_REMOTE_NAME:-origin}
+target_branch=${GOTAP_DEPLOY_BRANCH:-v2}
+
+if [ "$remote_name" != "$target_remote" ]; then
+    exit 0
+fi
+
+should_deploy=0
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+    [ -n "$remote_ref" ] || continue
+    if [ "$remote_ref" = "refs/heads/$target_branch" ] && [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+        should_deploy=1
+        break
+    fi
+done
+
+if [ "$should_deploy" -ne 1 ]; then
+    exit 0
+fi
+
+: "${GOTAP_DEPLOY_SSH_USER:=}"
+: "${GOTAP_DEPLOY_REMOTE_HOST:=}"
+: "${GOTAP_DEPLOY_SSH_PORT:=22}"
+: "${GOTAP_DEPLOY_REPO_DIR:=}"
+: "${GOTAP_DEPLOY_UPDATE_COMMAND:=git pull --ff-only origin v2}"
+: "${GOTAP_DEPLOY_RESTART_COMMAND:=docker compose -f management-api/docker-compose.yml up -d --build api}"
+: "${GOTAP_DEPLOY_SSH_KEY:=}"
+
+missing_config=""
+[ -n "$GOTAP_DEPLOY_SSH_USER" ] || missing_config="$missing_config GOTAP_DEPLOY_SSH_USER"
+[ -n "$GOTAP_DEPLOY_REMOTE_HOST" ] || missing_config="$missing_config GOTAP_DEPLOY_REMOTE_HOST"
+[ -n "$GOTAP_DEPLOY_REPO_DIR" ] || missing_config="$missing_config GOTAP_DEPLOY_REPO_DIR"
+if [ -n "$missing_config" ]; then
+    echo "已推送 $target_branch，但未执行生产部署；请补充配置：$missing_config" >&2
+    exit 0
+fi
+
+quote_argument() {
+    # 将目录安全地作为远端 Shell 参数传递。
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+remote_command="cd -- $(quote_argument "$GOTAP_DEPLOY_REPO_DIR") && $GOTAP_DEPLOY_UPDATE_COMMAND && $GOTAP_DEPLOY_RESTART_COMMAND"
+ssh_target="$GOTAP_DEPLOY_SSH_USER@$GOTAP_DEPLOY_REMOTE_HOST"
+
+echo "已推送 $target_branch，开始部署生产管理 API……"
+if [ -n "$GOTAP_DEPLOY_SSH_KEY" ]; then
+    ssh -p "$GOTAP_DEPLOY_SSH_PORT" \
+        -o BatchMode=yes \
+        -o StrictHostKeyChecking=yes \
+        -i "$GOTAP_DEPLOY_SSH_KEY" \
+        "$ssh_target" "$remote_command"
+    ssh_status=$?
+else
+    ssh -p "$GOTAP_DEPLOY_SSH_PORT" \
+        -o BatchMode=yes \
+        -o StrictHostKeyChecking=yes \
+        "$ssh_target" "$remote_command"
+    ssh_status=$?
+fi
+
+if [ "$ssh_status" -eq 0 ]; then
+    echo "生产管理 API 部署完成。"
+else
+    echo "生产管理 API 部署失败；代码已推送，请登录服务器检查。" >&2
+    exit 1
+fi

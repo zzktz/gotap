@@ -54,6 +54,9 @@ src-tauri/resources/sing-box/sing-box.exe
 /src-tauri/main.rs
 src-tauri/src/commands/goyou.rs
 
+# 自动部署的本地配置（包含服务器连接信息，禁止提交）
+.githooks/deploy.local.sh
+
 # Local-only deployment details and credentials (never commit)
 docs/敏感信息.md
 docs/敏感信息.local.md

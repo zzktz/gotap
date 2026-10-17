@@ -1,0 +1,14 @@
+# 复制为 .githooks/deploy.local.sh 后填写；该文件已被 Git 忽略。
+GOTAP_DEPLOY_REMOTE_NAME=origin
+GOTAP_DEPLOY_BRANCH=v2
+GOTAP_DEPLOY_SSH_USER=
+GOTAP_DEPLOY_REMOTE_HOST=
+GOTAP_DEPLOY_SSH_PORT=22
+GOTAP_DEPLOY_REPO_DIR=
+
+# 生产仓库目录下执行的更新和重启命令。
+GOTAP_DEPLOY_UPDATE_COMMAND='git pull --ff-only origin v2'
+GOTAP_DEPLOY_RESTART_COMMAND='docker compose -f management-api/docker-compose.yml up -d --build api'
+
+# 可选：指定 SSH 私钥；不填写时使用 ~/.ssh 的默认密钥。
+GOTAP_DEPLOY_SSH_KEY=
