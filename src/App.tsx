@@ -36,6 +36,7 @@ import {
   submitFeedback,
 } from "./auth";
 import type { AuthSession } from "./auth";
+import AppHeader, { CursorLogo } from "./components/AppHeader";
 
 type Mode = "login" | "register" | "forgot";
 type InfoPanel = "help" | "logs" | null;
@@ -329,27 +330,6 @@ function normalizeProfile(value: Partial<ClickProfile>): ClickProfile {
         : Math.min(MAX_REPEAT_COUNT, Math.max(0, profile.repeatCount)),
     targets: profile.targets ?? [],
   };
-}
-
-function CursorLogo() {
-  return (
-    <svg
-      aria-label="GoTap 鼠标箭头标志"
-      className="cursor-logo"
-      role="img"
-      viewBox="0 0 1024 1024"
-    >
-      <rect width="1024" height="1024" fill="#1768a7" />
-      <path
-        d="M842 562 422 422l140 420 117-117 94 94 46-47-93-93 116-117Z"
-        fill="#fff"
-      />
-      <path
-        d="M248 743V248h495v213l66 22V182H182v627h301l-22-66H248Z"
-        fill="#fff"
-      />
-    </svg>
-  );
 }
 
 function FieldLabel({
@@ -1372,36 +1352,21 @@ function ClickerPage({
   }, []);
   return (
     <main ref={appShellRef} className="app-shell clicker-shell">
-      <header className="topbar module-topbar">
-        <div className="brand">
-          <div className="brand-mark">
-            <CursorLogo />
-          </div>
-          <div>
-            <div className="brand-title">
-              <strong>GoTap</strong>
-              <button
-                className="brand-version-button"
-                onClick={() => void checkForUpdates(true)}
-                title="检查更新"
-                type="button"
-              >
-                v{appPackage.version}
-                {hasAvailableUpdate && (
-                  <span
-                    className="update-available-dot"
-                    aria-label="有新版本可更新"
-                  />
-                )}
-              </button>
-            </div>
-            <small className="brand-subtitle">桌面自动点击器</small>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
-          <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
-          <span className="module-account-email">{session.user.email}</span>
+      <AppHeader
+        accountEmail={session.user.email}
+        subtitle={moduleName}
+        versionBadge={(
+          <button
+            className="brand-version-button"
+            onClick={() => void checkForUpdates(true)}
+            title="检查更新"
+            type="button"
+          >
+            v{appPackage.version}
+            {hasAvailableUpdate && <span className="update-available-dot" aria-label="有新版本可更新" />}
+          </button>
+        )}
+        menu={(
           <div className="about-menu-wrap" ref={aboutMenuRef}>
             <Button
               aria-label="打开帮助与反馈菜单"
@@ -1459,8 +1424,10 @@ function ClickerPage({
               </div>
             )}
           </div>
-        </div>
-      </header>
+        )}
+      >
+        <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
+      </AppHeader>
       <section ref={contentRef} className="content">
         <div className="module-return-row">
           <strong className="module-return-title">{moduleName}</strong>
@@ -2105,21 +2072,11 @@ function ModuleHome({
   };
   return (
     <main className="app-shell module-shell">
-      <header className="topbar module-topbar">
-        <div className="brand">
-          <div className="brand-mark"><CursorLogo /></div>
-          <div>
-            <div className="brand-title">
-              <strong>GoTap</strong>
-              <HomeVersionBadge />
-            </div>
-            <small className="brand-subtitle">功能中心</small>
-          </div>
-        </div>
-        <div className="module-account">
-          <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
-          <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
-          <span className="module-account-email">{session.user.email}</span>
+      <AppHeader
+        accountEmail={session.user.email}
+        subtitle="功能中心"
+        versionBadge={<HomeVersionBadge />}
+        menu={(
           <div className="about-menu-wrap" ref={accountMenuRef}>
             <Button
               aria-label="打开账户菜单"
@@ -2171,8 +2128,10 @@ function ModuleHome({
               </div>
             )}
           </div>
-        </div>
-      </header>
+        )}
+      >
+        <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
+      </AppHeader>
       <section className="module-home">
         <div className="module-section-heading"><h1>功能模块</h1><span>{modules.length} 个可用 · 选择卡片即可进入</span></div>
         {modules.length ? (
@@ -2344,24 +2303,14 @@ function AuthenticatedApp() {
       />
     ) : (
       <main className="app-shell module-shell">
-        <header className="topbar module-topbar">
-          <div className="brand">
-            <div className="brand-mark"><CursorLogo /></div>
-            <div>
-              <div className="brand-title">
-                <strong>GoTap</strong>
-                <HomeVersionBadge />
-              </div>
-              <small className="brand-subtitle">{activeModule.name}</small>
-            </div>
-          </div>
-          <div className="topbar-actions">
-            <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={toggleTheme} />
-            <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
-            <span className="module-account-email">{session.user.email}</span>
-            <Button className="hero-button" onPress={returnToModuleHome} size="sm" variant="light">模块列表</Button>
-          </div>
-        </header>
+        <AppHeader
+          accountEmail={session.user.email}
+          subtitle={activeModule.name}
+          versionBadge={<HomeVersionBadge />}
+          menu={<Button className="hero-button" onPress={returnToModuleHome} size="sm" variant="light">模块列表</Button>}
+        >
+          <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={toggleTheme} />
+        </AppHeader>
         <section className="module-placeholder card"><p className="eyebrow">{activeModule.module_key}</p><h1>{activeModule.name}</h1><p>模块入口已就绪，具体功能将在后续版本接入。</p></section>
       </main>
     )
