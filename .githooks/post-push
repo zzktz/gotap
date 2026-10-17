@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# 推送 v2 成功后，通过 SSH 拉取生产代码并重启管理 API。
+# 推送 v2 后调用宝塔 Webhook，由生产服务器自行拉取和部署。
 set -u
 
 project_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
@@ -11,7 +11,7 @@ fi
 
 local_config="$project_root/.githooks/deploy.local.sh"
 if [ -f "$local_config" ]; then
-    # 本地配置由部署人员维护，不能提交到仓库。
+    # 本地配置包含 Webhook 密钥，禁止提交。
     # shellcheck disable=SC1090
     . "$local_config"
 fi
@@ -19,20 +19,18 @@ fi
 remote_name=${1:-}
 target_remote=${GOTAP_DEPLOY_REMOTE_NAME:-origin}
 target_branch=${GOTAP_DEPLOY_BRANCH:-v2}
+webhook_url=${GOTAP_DEPLOY_WEBHOOK_URL:-}
+webhook_insecure=${GOTAP_DEPLOY_WEBHOOK_INSECURE:-0}
 
 if [ "$remote_name" != "$target_remote" ]; then
     exit 0
 fi
 
 should_deploy=0
-frontend_changed=0
 while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
     [ -n "$remote_ref" ] || continue
     if [ "$remote_ref" = "refs/heads/$target_branch" ] && [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
         should_deploy=1
-        if [ "$remote_sha" = "0000000000000000000000000000000000000000" ] || ! git diff --quiet "$remote_sha" "$local_sha" -- admin; then
-            frontend_changed=1
-        fi
         break
     fi
 done
@@ -41,54 +39,24 @@ if [ "$should_deploy" -ne 1 ]; then
     exit 0
 fi
 
-: "${GOTAP_DEPLOY_SSH_USER:=}"
-: "${GOTAP_DEPLOY_REMOTE_HOST:=}"
-: "${GOTAP_DEPLOY_SSH_PORT:=22}"
-: "${GOTAP_DEPLOY_REPO_DIR:=}"
-: "${GOTAP_DEPLOY_FRONTEND_DIR:=}"
-: "${GOTAP_DEPLOY_UPDATE_COMMAND:=git pull --ff-only origin v2}"
-: "${GOTAP_DEPLOY_RESTART_COMMAND:=docker compose -f management-api/docker-compose.yml up -d --build api}"
-: "${GOTAP_DEPLOY_SSH_KEY:=}"
-
-missing_config=""
-[ -n "$GOTAP_DEPLOY_SSH_USER" ] || missing_config="$missing_config GOTAP_DEPLOY_SSH_USER"
-[ -n "$GOTAP_DEPLOY_REMOTE_HOST" ] || missing_config="$missing_config GOTAP_DEPLOY_REMOTE_HOST"
-[ -n "$GOTAP_DEPLOY_REPO_DIR" ] || missing_config="$missing_config GOTAP_DEPLOY_REPO_DIR"
-if [ "$frontend_changed" -eq 1 ] && [ -z "$GOTAP_DEPLOY_FRONTEND_DIR" ]; then
-    missing_config="$missing_config GOTAP_DEPLOY_FRONTEND_DIR"
-fi
-if [ -n "$missing_config" ]; then
-    echo "已推送 $target_branch，但未执行生产部署；请补充配置：$missing_config" >&2
-    exit 0
+if [ -z "$webhook_url" ]; then
+    echo "已推送 $target_branch，但未配置宝塔 Webhook 地址。" >&2
+    exit 1
 fi
 
-quote_argument() {
-    # 将目录安全地作为远端 Shell 参数传递。
-    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
-}
-
-remote_command="cd -- $(quote_argument "$GOTAP_DEPLOY_REPO_DIR") && export GOTAP_BUILD_ADMIN=$frontend_changed && $GOTAP_DEPLOY_UPDATE_COMMAND && $GOTAP_DEPLOY_RESTART_COMMAND"
-ssh_target="$GOTAP_DEPLOY_SSH_USER@$GOTAP_DEPLOY_REMOTE_HOST"
-
-echo "已推送 $target_branch，开始部署生产管理 API……"
-if [ -n "$GOTAP_DEPLOY_SSH_KEY" ]; then
-    ssh -p "$GOTAP_DEPLOY_SSH_PORT" \
-        -o BatchMode=yes \
-        -o StrictHostKeyChecking=yes \
-        -i "$GOTAP_DEPLOY_SSH_KEY" \
-        "$ssh_target" "$remote_command"
-    ssh_status=$?
+echo "已推送 $target_branch，正在调用宝塔 Webhook……"
+if [ "$webhook_insecure" = "1" ]; then
+    /usr/bin/curl --insecure --fail --silent --show-error --connect-timeout 10 \
+        "$webhook_url"
+    curl_status=$?
 else
-    ssh -p "$GOTAP_DEPLOY_SSH_PORT" \
-        -o BatchMode=yes \
-        -o StrictHostKeyChecking=yes \
-        "$ssh_target" "$remote_command"
-    ssh_status=$?
+    /usr/bin/curl --fail --silent --show-error --connect-timeout 10 \
+        "$webhook_url"
+    curl_status=$?
 fi
-
-if [ "$ssh_status" -eq 0 ]; then
-    echo "生产管理 API 部署完成。"
+if [ "$curl_status" -eq 0 ]; then
+    echo "宝塔 Webhook 已接收，服务器将自行拉取并部署。"
 else
-    echo "生产管理 API 部署失败；代码已推送，请登录服务器检查。" >&2
+    echo "宝塔 Webhook 调用失败；代码已推送，请检查宝塔面板和服务器日志。" >&2
     exit 1
 fi
