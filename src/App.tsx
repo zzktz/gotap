@@ -96,6 +96,59 @@ function getStoredThemePreference(): ThemePreference {
   }
   return "system";
 }
+
+function useThemePreference() {
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  const [themePreference, setThemePreference] = useState<ThemePreference>(getStoredThemePreference);
+  const isDark = themePreference === "system" ? systemDark : themePreference === "dark";
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateSystemTheme = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    media.addEventListener("change", updateSystemTheme);
+    return () => media.removeEventListener("change", updateSystemTheme);
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  }, [isDark]);
+  const toggleTheme = () => {
+    const nextTheme = isDark ? "light" : "dark";
+    try {
+      localStorage.setItem(THEME_PREFERENCE_KEY, nextTheme);
+    } catch {
+      // 即使无法保存，也立即切换当前界面主题。
+    }
+    setThemePreference(nextTheme);
+  };
+  return { isDark, toggleTheme };
+}
+
+function ThemeToggle({
+  isDark,
+  onToggle,
+  className = "theme-toggle",
+}: {
+  isDark: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      aria-label={isDark ? "切换为亮色风格" : "切换为暗色风格"}
+      className={className}
+      onClick={onToggle}
+      title={isDark ? "亮色风格" : "暗色风格"}
+      type="button"
+    >
+      {isDark ? (
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg>
+      ) : (
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.2 15.3A8.6 8.6 0 0 1 8.7 3.8 8.8 8.8 0 1 0 20.2 15.3Z" /></svg>
+      )}
+    </button>
+  );
+}
 interface ClickerStatus {
   state: "idle" | "running" | "stopped" | "completed" | "error";
   completed: number;
@@ -372,15 +425,14 @@ function SelectionOverlay() {
 
 function AuthPage({
   onAuthenticated,
+  isDark,
+  onToggleTheme,
 }: {
   onAuthenticated: (session: AuthSession) => void;
+  isDark: boolean;
+  onToggleTheme: () => void;
 }) {
   const remembered = useMemo(() => getRememberedLogin(), []);
-  const [systemDark, setSystemDark] = useState(
-    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
-  );
-  const [themePreference, setThemePreference] = useState<ThemePreference>(getStoredThemePreference);
-  const isDark = themePreference === "system" ? systemDark : themePreference === "dark";
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState(remembered?.email ?? "");
   const [password, setPassword] = useState(remembered?.password ?? "");
@@ -397,17 +449,6 @@ function AuthPage({
       .then((value) => setRegistrationEnabled(value.registration_enabled))
       .catch(() => undefined);
   }, []);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const updateSystemTheme = (event: MediaQueryListEvent) => setSystemDark(event.matches);
-    media.addEventListener("change", updateSystemTheme);
-    return () => media.removeEventListener("change", updateSystemTheme);
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = isDark ? "dark" : "light";
-  }, [isDark]);
 
   useEffect(() => {
     if (countdown <= 0) return undefined;
@@ -463,27 +504,7 @@ function AuthPage({
   };
   return (
     <main className={`auth-shell${mode === "login" ? "" : " auth-shell-expanded"}`}>
-      <button
-        aria-label={isDark ? "切换为亮色风格" : "切换为暗色风格"}
-        className="theme-toggle"
-        onClick={() => {
-          const nextTheme = isDark ? "light" : "dark";
-          try {
-            localStorage.setItem(THEME_PREFERENCE_KEY, nextTheme);
-          } catch {
-            // 即使无法保存，也立即切换当前界面主题。
-          }
-          setThemePreference(nextTheme);
-        }}
-        title={isDark ? "亮色风格" : "暗色风格"}
-        type="button"
-      >
-        {isDark ? (
-          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg>
-        ) : (
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.2 15.3A8.6 8.6 0 0 1 8.7 3.8 8.8 8.8 0 1 0 20.2 15.3Z" /></svg>
-        )}
-      </button>
+      <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
       <aside className="auth-visual">
         <div className="auth-visual-brand">
           <div className="brand-mark auth-brand-mark"><CursorLogo /></div>
@@ -1863,10 +1884,14 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
 function ModuleHome({
   session,
   modules,
+  isDark,
+  onToggleTheme,
   onLogout,
 }: {
   session: AuthSession;
   modules: Awaited<ReturnType<typeof getFeatureModules>>;
+  isDark: boolean;
+  onToggleTheme: () => void;
   onLogout: () => void;
 }) {
   const openModule = async (moduleKey: string) => {
@@ -1912,21 +1937,14 @@ function ModuleHome({
           <div><strong>GoTap</strong><small className="brand-subtitle">功能中心</small></div>
         </div>
         <div className="module-account">
+          <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
           <span className="module-account-avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
           <span className="module-account-email">{session.user.email}</span>
           <Button className="hero-button" size="sm" variant="light" onPress={onLogout}>退出</Button>
         </div>
       </header>
       <section className="module-home">
-        <div className="module-welcome">
-          <div>
-            <p className="eyebrow">GOTAP WORKSPACE</p>
-            <h1>今天，想用什么工具？</h1>
-            <p className="module-intro">常用桌面功能，一站开启。</p>
-          </div>
-          <div className="module-count"><strong>{modules.length.toString().padStart(2, "0")}</strong><span>个可用模块</span></div>
-        </div>
-        <div className="module-section-heading"><h2>功能模块</h2><span>选择卡片即可进入</span></div>
+        <div className="module-section-heading"><h1>功能模块</h1><span>{modules.length} 个可用 · 选择卡片即可进入</span></div>
         {modules.length ? (
           <div className="module-grid">
             {modules.map((module) => (
@@ -1947,6 +1965,7 @@ function ModuleHome({
 }
 
 function AuthenticatedApp() {
+  const { isDark, toggleTheme } = useThemePreference();
   const [session, setSession] = useState<AuthSession | null>(() =>
     getSession(),
   );
@@ -2017,6 +2036,8 @@ function AuthenticatedApp() {
   if (!session) {
     return (
       <AuthPage
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
         onAuthenticated={(nextSession) => {
           setSession(nextSession);
         }}
@@ -2051,6 +2072,8 @@ function AuthenticatedApp() {
     <ModuleHome
       session={session}
       modules={modules}
+      isDark={isDark}
+      onToggleTheme={toggleTheme}
       onLogout={() => {
         void logout();
         setSession(null);
