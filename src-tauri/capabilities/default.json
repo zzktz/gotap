@@ -2,9 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "GoTap desktop permissions",
-  "windows": ["main", "selection", "selection-*"],
+  "windows": ["main", "selection", "selection-*", "module-*"],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
     "process:allow-exit",
     "process:allow-restart",
     "global-shortcut:default",

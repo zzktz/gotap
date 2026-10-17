@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { exit, relaunch } from "@tauri-apps/plugin-process";
 import {
   check,
@@ -1862,14 +1863,34 @@ function ClickerPage({ onLogout, onBack }: { onLogout: () => void; onBack: () =>
 function ModuleHome({
   session,
   modules,
-  onSelect,
   onLogout,
 }: {
   session: AuthSession;
   modules: Awaited<ReturnType<typeof getFeatureModules>>;
-  onSelect: (moduleKey: string) => void;
   onLogout: () => void;
 }) {
+  const openModule = async (moduleKey: string) => {
+    const label = `module-${moduleKey.replace(/[^a-zA-Z0-9:_/-]/g, "-")}`;
+    const existing = await WebviewWindow.getByLabel(label);
+    if (existing) {
+      await existing.show();
+      await existing.setFocus();
+      return;
+    }
+    const moduleWindow = new WebviewWindow(label, {
+      title: `GoTap · ${modules.find((module) => module.module_key === moduleKey)?.name ?? "功能模块"}`,
+      url: `index.html?module=${encodeURIComponent(moduleKey)}`,
+      width: 900,
+      height: 506,
+      minWidth: 900,
+      minHeight: 506,
+      center: true,
+      resizable: true,
+    });
+    moduleWindow.once("tauri://error", (event) => {
+      console.error("打开功能模块窗口失败", event);
+    });
+  };
   const iconFor = (icon: string) => {
     const icons: Record<string, string> = {
       ThunderboltOutlined: "⚡",
@@ -1909,7 +1930,7 @@ function ModuleHome({
         {modules.length ? (
           <div className="module-grid">
             {modules.map((module) => (
-              <button className="module-tile" key={module.module_key} onClick={() => onSelect(module.module_key)}>
+              <button className="module-tile" key={module.module_key} onClick={() => void openModule(module.module_key)}>
                 <span className="module-card-top"><span className="module-icon">{iconFor(module.icon)}</span><span className="module-card-arrow" aria-hidden="true">↗</span></span>
                 <strong>{module.name}</strong>
                 <span className="module-description">{module.description || "打开模块开始使用"}</span>
@@ -1932,7 +1953,9 @@ function AuthenticatedApp() {
   const [authReady, setAuthReady] = useState(false);
   const [modules, setModules] = useState<Awaited<ReturnType<typeof getFeatureModules>>>([]);
   const [modulesLoaded, setModulesLoaded] = useState(false);
-  const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const [selectedModule, setSelectedModule] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("module"),
+  );
   useEffect(() => {
     let active = true;
     const storedSession = getSession();
@@ -2001,6 +2024,13 @@ function AuthenticatedApp() {
     );
   }
   if (!modulesLoaded) return null;
+  const returnToModuleHome = () => {
+    if (new URLSearchParams(window.location.search).has("module")) {
+      void getCurrentWindow().destroy();
+    } else {
+      setSelectedModule(null);
+    }
+  };
   const activeModule = modules.find((module) => module.module_key === selectedModule);
   return activeModule ? (
     activeModule.module_key === "clicker" ? (
@@ -2009,11 +2039,11 @@ function AuthenticatedApp() {
           void logout();
           setSession(null);
         }}
-        onBack={() => setSelectedModule(null)}
+        onBack={returnToModuleHome}
       />
     ) : (
       <main className="app-shell module-shell">
-        <header className="topbar"><Button className="hero-button" onPress={() => setSelectedModule(null)}>← 模块列表</Button><strong>{activeModule.name}</strong></header>
+        <header className="topbar"><Button className="hero-button" onPress={returnToModuleHome}>← 模块列表</Button><strong>{activeModule.name}</strong></header>
         <section className="module-placeholder card"><p className="eyebrow">{activeModule.module_key}</p><h1>{activeModule.name}</h1><p>模块入口已就绪，具体功能将在后续版本接入。</p></section>
       </main>
     )
@@ -2021,7 +2051,6 @@ function AuthenticatedApp() {
     <ModuleHome
       session={session}
       modules={modules}
-      onSelect={setSelectedModule}
       onLogout={() => {
         void logout();
         setSession(null);
