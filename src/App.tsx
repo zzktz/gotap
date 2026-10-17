@@ -37,7 +37,7 @@ import {
   submitFeedback,
 } from "./auth";
 import type { AuthSession } from "./auth";
-import AppHeader, { CursorLogo } from "./components/AppHeader";
+import AppHeader, { AppHeaderMenu, CursorLogo } from "./components/AppHeader";
 
 type Mode = "login" | "register" | "forgot";
 type InfoPanel = "help" | "logs" | null;
@@ -2017,11 +2017,13 @@ function DocumentConverterPage({
   isDark,
   onToggleTheme,
   onBack,
+  onLogout,
 }: {
   session: AuthSession;
   isDark: boolean;
   onToggleTheme: () => void;
   onBack: () => void;
+  onLogout: () => void;
 }) {
   const [jobs, setJobs] = useState<DocumentConversionJob[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -2029,6 +2031,11 @@ function DocumentConverterPage({
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+  const [feedbackSuccess, setFeedbackSuccess] = useState("");
 
   const loadJobs = async () => {
     try {
@@ -2101,6 +2108,25 @@ function DocumentConverterPage({
       setError(formatErrorMessage(downloadError));
     }
   };
+  const sendFeedback = async () => {
+    const message = feedbackMessage.trim();
+    if (!message) {
+      setFeedbackError("请填写反馈内容");
+      return;
+    }
+    setFeedbackBusy(true);
+    setFeedbackError("");
+    setFeedbackSuccess("");
+    try {
+      await submitFeedback(message, []);
+      setFeedbackMessage("");
+      setFeedbackSuccess("反馈已提交，感谢你的反馈！");
+    } catch (feedbackSubmitError) {
+      setFeedbackError(formatErrorMessage(feedbackSubmitError));
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
   const statusLabel: Record<DocumentConversionJob["status"], string> = {
     queued: "排队中", running: "转换中", succeeded: "已完成", failed: "失败", expired: "已过期",
   };
@@ -2108,7 +2134,12 @@ function DocumentConverterPage({
 
   return (
     <main className="app-shell module-shell">
-      <AppHeader accountEmail={session.user.email} subtitle="文档格式互转" versionBadge={<HomeVersionBadge />}>
+      <AppHeader
+        accountEmail={session.user.email}
+        subtitle="文档格式互转"
+        versionBadge={<HomeVersionBadge />}
+        menu={<AppHeaderMenu onFeedback={() => { setFeedbackMessage(""); setFeedbackError(""); setFeedbackSuccess(""); setFeedbackOpen(true); }} onLogout={onLogout} />}
+      >
         <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
       </AppHeader>
       <section className="document-converter module-home">
@@ -2163,6 +2194,23 @@ function DocumentConverterPage({
           </div>
         ) : <div className="document-empty">还没有转换记录。</div>}
       </section>
+      {feedbackOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="feedback-dialog" role="dialog" aria-modal="true" aria-labelledby="document-feedback-title">
+            <div className="info-dialog-heading">
+              <div><p className="eyebrow">反馈</p><h2 id="document-feedback-title">问题反馈</h2></div>
+              <Button aria-label="关闭反馈弹出层" className="dialog-close-button" isIconOnly isDisabled={feedbackBusy} onPress={() => setFeedbackOpen(false)} size="sm" variant="light">×</Button>
+            </div>
+            <textarea className="feedback-textarea" maxLength={5000} onChange={(event) => setFeedbackMessage(event.target.value)} placeholder="请描述遇到的问题或希望改进的地方" value={feedbackMessage} />
+            {feedbackError && <p className="error">{feedbackError}</p>}
+            {feedbackSuccess && <p className="feedback-success" role="status">{feedbackSuccess}</p>}
+            <div className="feedback-dialog-actions">
+              <Button className="hero-button" isDisabled={feedbackBusy} onPress={() => setFeedbackOpen(false)} size="sm" variant="light">关闭</Button>
+              <Button className="hero-button" color="primary" isDisabled={feedbackBusy} onPress={() => void sendFeedback()} size="sm">{feedbackBusy ? "提交中…" : "提交反馈"}</Button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -2182,30 +2230,11 @@ function ModuleHome({
   onToggleTheme: () => void;
   onLogout: () => void;
 }) {
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
   const [feedbackSuccess, setFeedbackSuccess] = useState("");
-  const accountMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!accountMenuOpen) return undefined;
-    const closeOnOutsideClick = (event: PointerEvent) => {
-      if (!accountMenuRef.current?.contains(event.target as Node)) {
-        setAccountMenuOpen(false);
-      }
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setAccountMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOnOutsideClick);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsideClick);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [accountMenuOpen]);
   const sendHomeFeedback = async () => {
     const message = feedbackMessage.trim();
     if (!message) {
@@ -2244,59 +2273,7 @@ function ModuleHome({
         accountEmail={session.user.email}
         subtitle="功能中心"
         versionBadge={<HomeVersionBadge />}
-        menu={(
-          <div className="about-menu-wrap" ref={accountMenuRef}>
-            <Button
-              aria-label="打开账户菜单"
-              aria-expanded={accountMenuOpen}
-              aria-haspopup="menu"
-              className="topbar-action"
-              onPress={() => setAccountMenuOpen((open) => !open)}
-              size="sm"
-              title="账户菜单"
-              variant="light"
-            >
-              <span className="help-icon" aria-hidden="true">?</span>
-            </Button>
-            {accountMenuOpen && (
-              <div className="about-menu" role="menu">
-                <button
-                  onClick={() => {
-                    setAccountMenuOpen(false);
-                    setFeedbackMessage("");
-                    setFeedbackError("");
-                    setFeedbackSuccess("");
-                    setFeedbackOpen(true);
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  问题反馈
-                </button>
-                <button
-                  onClick={() => {
-                    setAccountMenuOpen(false);
-                    onLogout();
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  退出登录
-                </button>
-                <button
-                  onClick={() => {
-                    setAccountMenuOpen(false);
-                    void exit(0);
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  退出程序
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+        menu={<AppHeaderMenu onFeedback={() => { setFeedbackMessage(""); setFeedbackError(""); setFeedbackSuccess(""); setFeedbackOpen(true); }} onLogout={onLogout} />}
       >
         <ThemeToggle className="theme-toggle module-theme-toggle" isDark={isDark} onToggle={onToggleTheme} />
       </AppHeader>
@@ -2475,6 +2452,10 @@ function AuthenticatedApp() {
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onBack={returnToModuleHome}
+        onLogout={() => {
+          void logout();
+          setSession(null);
+        }}
       />
     ) : (
       <main className="app-shell module-shell">

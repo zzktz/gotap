@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Button } from "@heroui/react";
+import { exit } from "@tauri-apps/plugin-process";
 import logoUrl from "../logo.png";
 
 interface AppHeaderProps {
@@ -16,6 +18,56 @@ export function CursorLogo() {
       className="cursor-logo"
       src={logoUrl}
     />
+  );
+}
+
+interface AppHeaderMenuProps {
+  onLogout: () => void;
+  onFeedback: () => void;
+}
+
+/** Shared account/help menu shown by the home page and feature modules. */
+export function AppHeaderMenu({ onLogout, onFeedback }: AppHeaderMenuProps) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className="about-menu-wrap" ref={menuRef}>
+      <Button
+        aria-label="打开账户菜单"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="topbar-action"
+        onPress={() => setOpen((value) => !value)}
+        size="sm"
+        title="账户菜单"
+        variant="light"
+      >
+        <span className="help-icon" aria-hidden="true">?</span>
+      </Button>
+      {open && (
+        <div className="about-menu" role="menu">
+          <button onClick={() => { setOpen(false); onFeedback(); }} role="menuitem" type="button">问题反馈</button>
+          <button onClick={() => { setOpen(false); onLogout(); }} role="menuitem" type="button">退出登录</button>
+          <button onClick={() => { setOpen(false); void exit(0); }} role="menuitem" type="button">退出程序</button>
+        </div>
+      )}
+    </div>
   );
 }
 
