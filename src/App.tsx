@@ -2037,6 +2037,7 @@ function DocumentConverterPage({
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
   const [feedbackSuccess, setFeedbackSuccess] = useState("");
+  const [downloadSuccess, setDownloadSuccess] = useState("");
 
   const loadJobs = async () => {
     try {
@@ -2133,6 +2134,7 @@ function DocumentConverterPage({
   };
   const downloadResult = async (job: DocumentConversionJob) => {
     try {
+      setDownloadSuccess("");
       const result = await invoke<{ filename: string; contentType: string; bytes: number[] }>(
         "download_document_conversion",
         { jobId: job.id, accessToken: session.token },
@@ -2140,10 +2142,20 @@ function DocumentConverterPage({
       const blob = new Blob([new Uint8Array(result.bytes)], { type: result.contentType });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
+      const sourceStem = job.source_name.replace(/\.[^.]+$/, "");
+      const filename = `${sourceStem}.${job.target_format}`;
       anchor.href = url;
-      anchor.download = result.filename;
+      // The server may return `filename*` or a proxy may strip the header.
+      // The conversion record is authoritative and always gives us the correct extension.
+      anchor.download = filename;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
       anchor.click();
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => {
+        URL.revokeObjectURL(url);
+        anchor.remove();
+      }, 1000);
+      setDownloadSuccess(`下载成功：${filename}`);
     } catch (downloadError) {
       setError(formatErrorMessage(downloadError));
     }
@@ -2219,6 +2231,7 @@ function DocumentConverterPage({
           </Button>
         </div>
         <p className="document-quality-note">PDF 转 Word 或 PowerPoint 时，原文档布局可能无法完整还原，转换结果建议人工校对；扫描版 PDF 可能需要 OCR。</p>
+        {downloadSuccess && <p className="feedback-success document-download-success" role="status">{downloadSuccess}</p>}
         {error && <p className="error document-error" role="alert">{error}</p>}
         <div className="document-history-heading"><h2>转换记录</h2><Button className="hero-button document-refresh-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
         {jobs.length ? (
