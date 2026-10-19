@@ -2039,6 +2039,7 @@ function DocumentConverterPage({
   const [feedbackSuccess, setFeedbackSuccess] = useState("");
   const [downloadSuccess, setDownloadSuccess] = useState("");
   const [documentPage, setDocumentPage] = useState<"converter" | "history">("converter");
+  const activeConversionJobId = useRef<string | null>(null);
 
   const loadJobs = async () => {
     try {
@@ -2046,7 +2047,10 @@ function DocumentConverterPage({
         headers: { Authorization: `Bearer ${session.token}` },
       });
       setJobs(result.items);
-      setError("");
+      const activeFailedJob = activeConversionJobId.current
+        ? result.items.find((job) => job.id === activeConversionJobId.current && job.status === "failed")
+        : undefined;
+      setError(activeFailedJob?.error_message || (activeFailedJob ? "转换失败" : ""));
     } catch (loadError) {
       setError(formatErrorMessage(loadError));
     }
@@ -2125,6 +2129,7 @@ function DocumentConverterPage({
           accessToken: session.token,
         });
       setJobs((current) => [job, ...current]);
+      activeConversionJobId.current = job.id;
       setPendingDocument(null);
       await loadJobs();
     } catch (uploadError) {
@@ -2207,6 +2212,10 @@ function DocumentConverterPage({
             <Button className="hero-button module-back-button" size="sm" variant="light" onPress={onBack}>← 模块列表</Button>
           </div>
         </div>
+        <div className="document-info-panel" role="status" aria-live="polite">
+          <span className="document-info-label">信息提示</span>
+          {error ? <p className="error">{error}</p> : downloadSuccess ? <p className="success">{downloadSuccess}</p> : <p className="hint">{documentPage === "converter" ? "选择文件后点击“开始转换”，转换状态会显示在“转换记录”页面。" : "转换失败原因和操作提示会显示在这里。"}</p>}
+        </div>
         {documentPage === "converter" ? <>
         <div
           className={`document-dropzone${dragging ? " is-dragging" : ""}`}
@@ -2240,10 +2249,6 @@ function DocumentConverterPage({
           </Button>
         </div>
         <p className="document-quality-note">转换服务会使用服务器可用字体；常见字体已配置兼容映射，但未安装或未嵌入的商业字体可能发生替换。PDF 转 Word 或 PowerPoint 时，原文档布局可能无法完整还原，转换结果建议人工校对；扫描版 PDF 可能需要 OCR。</p>
-        <div className="document-info-panel" role="status" aria-live="polite">
-          <span className="document-info-label">信息提示</span>
-          {error ? <p className="error">{error}</p> : downloadSuccess ? <p className="success">{downloadSuccess}</p> : <p className="hint">选择文件后点击“开始转换”，转换状态会显示在“转换记录”页面。</p>}
-        </div>
         </> : <div className="document-history-page">
           <div className="document-history-heading"><div><h2>转换记录</h2><p>查看转换任务状态并下载已完成的文件。</p></div><Button className="hero-button document-refresh-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
         {jobs.length ? (
@@ -2253,7 +2258,6 @@ function DocumentConverterPage({
                 <div className="document-job-file"><strong>{job.source_name}</strong><span>{job.source_format.toUpperCase()} → {job.target_format.toUpperCase()} · {formatSize(job.input_size)} · {new Date(job.created_at).toLocaleString()}</span></div>
                 <span className={`document-job-status status-${job.status}`}>{statusLabel[job.status]}</span>
                 {job.status === "succeeded" ? <Button className="hero-button" size="sm" onPress={() => void downloadResult(job)}>下载</Button> : null}
-                {job.status === "failed" && <span className="document-job-error">{job.error_message || "转换失败"}</span>}
               </article>
             ))}
           </div>
