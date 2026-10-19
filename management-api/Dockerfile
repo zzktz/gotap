@@ -4,6 +4,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libreoffice-writer \
         libreoffice-impress \
+        libreoffice-draw \
         fontconfig \
         fonts-noto-cjk \
         fonts-crosextra-carlito \

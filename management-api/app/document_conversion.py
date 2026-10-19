@@ -14,7 +14,7 @@ from .config import DOCUMENT_CONVERSION_TIMEOUT_SECONDS
 
 ALLOWED_FORMATS = {"doc", "docx", "ppt", "pptx", "pdf"}
 OFFICE_TO_PDF = {"doc": "writer_pdf_Export", "docx": "writer_pdf_Export", "ppt": "impress_pdf_Export", "pptx": "impress_pdf_Export"}
-PDF_TO_OFFICE = {"doc": "doc:MS Word 97", "docx": "docx:MS Word 2007 XML", "ppt": "ppt:MS PowerPoint 97", "pptx": "pptx:Impress MS PowerPoint 2007 XML"}
+PDF_TO_OFFICE = {"doc": "doc:MS Word 97", "docx": "docx:Office Open XML Text", "ppt": "ppt:MS PowerPoint 97", "pptx": "pptx:Impress MS PowerPoint 2007 XML"}
 
 
 def convert_document(source: Path, target_format: str, output_dir: Path) -> Path:

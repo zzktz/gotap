@@ -47,6 +47,25 @@ class DocumentConversionTests(unittest.TestCase):
             self.assertIn("--headless", command)
 
     @patch("app.document_conversion.subprocess.Popen")
+    def test_pdf_to_docx_uses_writer_export_filter(self, popen: Mock) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.pdf"
+            source.write_bytes(b"%PDF-sample")
+            output_dir = Path(directory) / "out"
+            output_dir.mkdir()
+            (output_dir / "sample.docx").write_bytes(b"PK-result")
+            process = Mock(returncode=0)
+            process.communicate.return_value = ("", "")
+            popen.return_value = process
+
+            result = convert_document(source, "docx", output_dir)
+
+            self.assertEqual(result.name, "sample.docx")
+            command = popen.call_args.args[0]
+            self.assertIn("docx:Office Open XML Text", command)
+            self.assertIn("--headless", command)
+
+    @patch("app.document_conversion.subprocess.Popen")
     def test_missing_output_is_reported_as_conversion_failure(self, popen: Mock) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "sample.pptx"
