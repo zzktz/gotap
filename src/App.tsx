@@ -2230,7 +2230,7 @@ function DocumentConverterPage({
             开始转换
           </Button>
         </div>
-        <p className="document-quality-note">PDF 转 Word 或 PowerPoint 时，原文档布局可能无法完整还原，转换结果建议人工校对；扫描版 PDF 可能需要 OCR。</p>
+        <p className="document-quality-note">转换服务会使用服务器可用字体；常见字体已配置兼容映射，但未安装或未嵌入的商业字体可能发生替换。PDF 转 Word 或 PowerPoint 时，原文档布局可能无法完整还原，转换结果建议人工校对；扫描版 PDF 可能需要 OCR。</p>
         {downloadSuccess && <p className="feedback-success document-download-success" role="status">{downloadSuccess}</p>}
         {error && <p className="error document-error" role="alert">{error}</p>}
         <div className="document-history-heading"><h2>转换记录</h2><Button className="hero-button document-refresh-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
