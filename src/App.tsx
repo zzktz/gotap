@@ -87,6 +87,7 @@ const START_DELAY_SECONDS = 3;
 const INITIAL_UPDATE_CHECK_DELAY_MS = 20_000;
 const THEME_PREFERENCE_KEY = "gotap.theme.preference";
 type ThemePreference = "system" | "light" | "dark";
+type PendingDocument = { name: string; size: number; file?: File; path?: string };
 
 function getStoredThemePreference(): ThemePreference {
   try {
@@ -2026,7 +2027,7 @@ function DocumentConverterPage({
   onLogout: () => void;
 }) {
   const [jobs, setJobs] = useState<DocumentConversionJob[]>([]);
-  const [file, setFile] = useState<File | null>(null);
+  const [pendingDocument, setPendingDocument] = useState<PendingDocument | null>(null);
   const [targetFormat, setTargetFormat] = useState("pdf");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -2067,23 +2068,62 @@ function DocumentConverterPage({
       return;
     }
     setError("");
-    setFile(candidate);
+    setPendingDocument({ name: candidate.name, size: candidate.size, file: candidate });
     setTargetFormat(extension === "pdf" ? "docx" : "pdf");
   };
+  const acceptDroppedPath = async (path: string) => {
+    try {
+      const info = await invoke<{ filename: string; size: number }>("inspect_dropped_document", { path });
+      const extension = info.filename.split(".").pop()?.toLowerCase() ?? "";
+      setError("");
+      setPendingDocument({ name: info.filename, size: info.size, path });
+      setTargetFormat(extension === "pdf" ? "docx" : "pdf");
+    } catch (dropError) {
+      setError(formatErrorMessage(dropError));
+    }
+  };
+  useEffect(() => {
+    let active = true;
+    let dispose: (() => void) | undefined;
+    void getCurrentWindow().onDragDropEvent((event) => {
+      if (!active) return;
+      if (event.payload.type === "enter" || event.payload.type === "over") {
+        setDragging(true);
+      } else if (event.payload.type === "leave") {
+        setDragging(false);
+      } else if (event.payload.type === "drop") {
+        setDragging(false);
+        const path = event.payload.paths[0];
+        if (path) void acceptDroppedPath(path);
+      }
+    }).then((unlisten) => {
+      if (active) dispose = unlisten;
+      else unlisten();
+    });
+    return () => {
+      active = false;
+      dispose?.();
+    };
+  }, []);
   const startConversion = async () => {
-    if (!file) return;
+    if (!pendingDocument) return;
     setBusy(true);
     setError("");
     try {
-      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-      const job = await invoke<DocumentConversionJob>("upload_document_conversion", {
-        filename: file.name,
-        targetFormat,
-        bytes,
-        accessToken: session.token,
-      });
+      const job = pendingDocument.path
+        ? await invoke<DocumentConversionJob>("upload_dropped_document_conversion", {
+          path: pendingDocument.path,
+          targetFormat,
+          accessToken: session.token,
+        })
+        : await invoke<DocumentConversionJob>("upload_document_conversion", {
+          filename: pendingDocument.name,
+          targetFormat,
+          bytes: Array.from(new Uint8Array(await pendingDocument.file!.arrayBuffer())),
+          accessToken: session.token,
+        });
       setJobs((current) => [job, ...current]);
-      setFile(null);
+      setPendingDocument(null);
       await loadJobs();
     } catch (uploadError) {
       setError(formatErrorMessage(uploadError));
@@ -2155,8 +2195,8 @@ function DocumentConverterPage({
           onDrop={(event) => { event.preventDefault(); setDragging(false); acceptFile(event.dataTransfer.files[0]); }}
         >
           <span className="document-drop-icon" aria-hidden="true">⇧</span>
-          <strong>{file ? file.name : "拖放文档到这里"}</strong>
-          <span>{file ? formatSize(file.size) : "或选择文件，支持 DOC、DOCX、PPT、PPTX、PDF，最大 50 MB"}</span>
+          <strong>{pendingDocument ? pendingDocument.name : "拖放文档到这里"}</strong>
+          <span>{pendingDocument ? formatSize(pendingDocument.size) : "或选择文件，支持 DOC、DOCX、PPT、PPTX、PDF，最大 50 MB"}</span>
           <label className="hero-button document-choose-button">
             选择文件
             <input accept=".doc,.docx,.ppt,.pptx,.pdf" type="file" onChange={(event) => acceptFile(event.target.files?.[0])} />
@@ -2172,9 +2212,9 @@ function DocumentConverterPage({
             onChange={(event) => setTargetFormat(event.target.value)}
             size="sm"
           >
-            {(file?.name.toLowerCase().endsWith(".pdf") ? ["docx", "doc", "pptx", "ppt"] : ["pdf"]).map((format) => <SelectItem key={format}>{format.toUpperCase()}</SelectItem>)}
+            {(pendingDocument?.name.toLowerCase().endsWith(".pdf") ? ["docx", "doc", "pptx", "ppt"] : ["pdf"]).map((format) => <SelectItem key={format}>{format.toUpperCase()}</SelectItem>)}
           </Select>
-          <Button className="hero-button primary-action-button" color="primary" isDisabled={!file || busy} isLoading={busy} onPress={() => void startConversion()}>
+          <Button className="hero-button primary-action-button" color="primary" isDisabled={!pendingDocument || busy} isLoading={busy} onPress={() => void startConversion()}>
             开始转换
           </Button>
         </div>

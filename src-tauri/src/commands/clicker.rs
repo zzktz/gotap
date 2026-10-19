@@ -782,6 +782,47 @@ pub struct ConversionDownload {
     pub bytes: Vec<u8>,
 }
 
+#[derive(serde::Serialize)]
+pub struct DroppedDocumentInfo {
+    pub filename: String,
+    pub size: u64,
+}
+
+fn dropped_document_filename(path: &str) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "无法读取拖放文件名".to_owned())?;
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !["doc", "docx", "ppt", "pptx", "pdf"].contains(&extension.as_str()) {
+        return Err("仅支持 DOC、DOCX、PPT、PPTX 和 PDF 文件".to_owned());
+    }
+    Ok(filename.to_owned())
+}
+
+#[tauri::command]
+pub fn inspect_dropped_document(path: String) -> Result<DroppedDocumentInfo, String> {
+    const MAX_DOCUMENT_SIZE: u64 = 50 * 1024 * 1024;
+    let filename = dropped_document_filename(&path)?;
+    let metadata = fs::metadata(&path).map_err(|error| format!("无法读取拖放文件：{error}"))?;
+    if !metadata.is_file() {
+        return Err("拖放的项目不是文件".to_owned());
+    }
+    if metadata.len() > MAX_DOCUMENT_SIZE {
+        return Err("文件不能超过 50 MB".to_owned());
+    }
+    Ok(DroppedDocumentInfo {
+        filename,
+        size: metadata.len(),
+    })
+}
+
 #[tauri::command]
 pub async fn upload_document_conversion(
     filename: String,
@@ -835,6 +876,17 @@ pub async fn upload_document_conversion(
             .map(|error| error.to_string())
             .unwrap_or_else(|| "未知错误".into())
     ))
+}
+
+#[tauri::command]
+pub async fn upload_dropped_document_conversion(
+    path: String,
+    target_format: String,
+    access_token: String,
+) -> Result<serde_json::Value, String> {
+    let info = inspect_dropped_document(path.clone())?;
+    let bytes = fs::read(&path).map_err(|error| format!("读取拖放文件失败：{error}"))?;
+    upload_document_conversion(info.filename, target_format, bytes, access_token).await
 }
 
 #[tauri::command]
