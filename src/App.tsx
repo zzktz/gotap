@@ -2038,6 +2038,7 @@ function DocumentConverterPage({
   const [feedbackError, setFeedbackError] = useState("");
   const [feedbackSuccess, setFeedbackSuccess] = useState("");
   const [downloadSuccess, setDownloadSuccess] = useState("");
+  const [documentPage, setDocumentPage] = useState<"converter" | "history">("converter");
 
   const loadJobs = async () => {
     try {
@@ -2196,9 +2197,17 @@ function DocumentConverterPage({
       </AppHeader>
       <section className="document-converter module-home">
         <div className="module-return-row">
-          <strong className="module-return-title">文档格式互转</strong>
-          <Button className="hero-button module-back-button" size="sm" variant="light" onPress={onBack}>← 模块列表</Button>
+          <strong className="module-return-title">{documentPage === "history" ? "转换记录" : "文档格式互转"}</strong>
+          <div className="document-page-actions">
+            {documentPage === "converter" ? (
+              <Button className="hero-button document-history-button" size="sm" variant="light" onPress={() => setDocumentPage("history")}>转换记录</Button>
+            ) : (
+              <Button className="hero-button document-history-button" size="sm" variant="light" onPress={() => setDocumentPage("converter")}>返回转换</Button>
+            )}
+            <Button className="hero-button module-back-button" size="sm" variant="light" onPress={onBack}>← 模块列表</Button>
+          </div>
         </div>
+        {documentPage === "converter" ? <>
         <div
           className={`document-dropzone${dragging ? " is-dragging" : ""}`}
           onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
@@ -2231,9 +2240,12 @@ function DocumentConverterPage({
           </Button>
         </div>
         <p className="document-quality-note">转换服务会使用服务器可用字体；常见字体已配置兼容映射，但未安装或未嵌入的商业字体可能发生替换。PDF 转 Word 或 PowerPoint 时，原文档布局可能无法完整还原，转换结果建议人工校对；扫描版 PDF 可能需要 OCR。</p>
-        {downloadSuccess && <p className="feedback-success document-download-success" role="status">{downloadSuccess}</p>}
-        {error && <p className="error document-error" role="alert">{error}</p>}
-        <div className="document-history-heading"><h2>转换记录</h2><Button className="hero-button document-refresh-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
+        <div className="document-info-panel" role="status" aria-live="polite">
+          <span className="document-info-label">信息提示</span>
+          {error ? <p className="error">{error}</p> : downloadSuccess ? <p className="success">{downloadSuccess}</p> : <p className="hint">选择文件后点击“开始转换”，转换状态会显示在“转换记录”页面。</p>}
+        </div>
+        </> : <div className="document-history-page">
+          <div className="document-history-heading"><div><h2>转换记录</h2><p>查看转换任务状态并下载已完成的文件。</p></div><Button className="hero-button document-refresh-button" size="sm" variant="light" onPress={() => void loadJobs()}>刷新</Button></div>
         {jobs.length ? (
           <div className="document-job-list">
             {jobs.map((job) => (
@@ -2246,6 +2258,7 @@ function DocumentConverterPage({
             ))}
           </div>
         ) : <div className="document-empty">还没有转换记录。</div>}
+        </div>}
       </section>
       {feedbackOpen && (
         <div className="modal-backdrop" role="presentation">
